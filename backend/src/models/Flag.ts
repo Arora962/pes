@@ -3,8 +3,11 @@ import { Schema, model, Document, Types } from "mongoose";
 export interface IFlag extends Document {
   evaluation: Types.ObjectId;
   flaggedBy: Types.ObjectId;
-  resolvedBy?: string;
+  resolvedBy?: Types.ObjectId;
   resolutionStatus: 'pending' | 'resolved' | 'escalated';
+  reason?: string;
+  escalationReason?: string;
+  createdAt: Date;
 }
 
 const flagSchema = new Schema<IFlag>({
@@ -16,6 +19,9 @@ const flagSchema = new Schema<IFlag>({
     enum: ['pending', 'resolved', 'escalated'],
     default: 'pending',
   },
+  reason: { type: String },
+  escalationReason: { type: String },
+  createdAt: { type: Date, default: Date.now }
 });
 
 export const Flag = model<IFlag>('Flag', flagSchema);
