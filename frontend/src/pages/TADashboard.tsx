@@ -9,6 +9,7 @@ const TADashboard = ({ onLogout }: { onLogout?: () => void }) => {
   //const [showSettings, setShowSettings] = useState(false);
   const [commentDialog, setCommentDialog] = useState<{ show: boolean; id: number | null }>({ show: false, id: null });
   const [comment, setComment] = useState('');
+  const [showUpdateMarksDialog, setShowUpdateMarksDialog] = useState(false);
 
   useEffect(() => {
     if (darkMode) {
@@ -69,7 +70,7 @@ const TADashboard = ({ onLogout }: { onLogout?: () => void }) => {
   ]);
 
   const handleTranscriptUpload = (id: number) => {
-    alert(`Upload transcript for evaluation ${id}`);
+    setShowUpdateMarksDialog(true);
   };
 
   const handleTranscriptDownload = (id: number) => {
@@ -155,7 +156,51 @@ const TADashboard = ({ onLogout }: { onLogout?: () => void }) => {
       </div>
     )
   };
-
+{showUpdateMarksDialog && (
+  <div
+    style={{
+      position: "fixed",
+      top: 0,
+      left: 0,
+      width: "100vw",
+      height: "100vh",
+      background: "rgba(0,0,0,0.3)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      zIndex: 1000,
+    }}
+  >
+    <div
+      style={{
+        background: "#fff",
+        borderRadius: 12,
+        padding: 32,
+        minWidth: 320,
+        boxShadow: "0 4px 24px rgba(0,0,0,0.12)",
+        textAlign: "center",
+      }}
+    >
+      <h3 style={{ marginBottom: 16 }}>Update Marks</h3>
+      <p style={{ marginBottom: 24 }}>Please update the marks after uploading the transcript.</p>
+      <button
+        style={{
+          background: "#6c63ff",
+          color: "#fff",
+          border: "none",
+          borderRadius: 24,
+          padding: "8px 32px",
+          fontWeight: 600,
+          fontSize: 16,
+          cursor: "pointer",
+        }}
+        onClick={() => setShowUpdateMarksDialog(false)}
+      >
+        OK
+      </button>
+    </div>
+  </div>
+)}
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: "linear-gradient(180deg,#ffe3ec 80%,#f0f0f5 100%)" }}>
       {/* Sidebar */}
@@ -197,7 +242,21 @@ const TADashboard = ({ onLogout }: { onLogout?: () => void }) => {
           </div>
         </DialogBox>
 
-        <DialogBox show={commentDialog.show} message="Add a comment before sending">
+        {/* Upload Transcript Dialog */}
+        {showUpdateMarksDialog && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+            <div className="bg-white rounded-2xl shadow-xl px-6 py-8 w-full max-w-md text-center">
+              <h2 className="text-xl font-bold text-gray-800 mb-4">Upload Transcript & Update Marks</h2>
+              <input type="file" accept="application/pdf,image/*" className="mb-4 w-full border p-2 rounded-lg" />
+              <input type="number" placeholder="Enter Updated Marks" className="mb-4 w-full border p-2 rounded-lg" />
+              <div className="flex justify-center gap-4">
+                <button onClick={() => setShowUpdateMarksDialog(false)} className="bg-gray-300 px-4 py-2 rounded-lg hover:bg-gray-400">Cancel</button>
+                <button onClick={() => setShowUpdateMarksDialog(false)} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">Submit</button>
+              </div>
+            </div>
+          </div>
+        )}
+<DialogBox show={commentDialog.show} message="Add a comment before sending">
           <textarea value={comment} onChange={e => setComment(e.target.value)} placeholder="Write your note here..." className="w-full border rounded-lg p-2 text-gray-800 mb-4" rows={3} />
           <div className="flex gap-4">
             <button onClick={() => setCommentDialog({ show: false, id: null })} className="bg-gray-300 px-4 py-2 rounded-lg hover:bg-gray-400">Cancel</button>
