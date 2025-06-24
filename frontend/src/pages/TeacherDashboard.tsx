@@ -2,13 +2,15 @@ import React, { useState, useEffect } from 'react';
 import type { JSX } from 'react';
 import {
   FiMenu, FiLogOut, FiHome,
-  FiBook, FiUsers, FiEdit, FiShield
+  FiBook, FiUsers, FiEdit, FiShield,
+  FiDownload, FiUserPlus, FiUserCheck
 } from 'react-icons/fi';
-//import axios from 'axios';
+
+// Optional: If you want animated numbers and motion, install framer-motion
+import { motion } from 'framer-motion';
 
 const PORT = import.meta.env.VITE_BACKEND_PORT || 5000;
 
-// Types for backend data
 interface ExamRecord {
   title: string;
   course: string;
@@ -16,40 +18,55 @@ interface ExamRecord {
   startTime: string;
   endTime: string;
   numQuestions: number;
+  duration: string;
+  totalMarks: number;
+  k: number;
+  totalStudents: number;
+  solutions: string;
 }
-/*interface SummaryData {
-  courses: number;
-  batches: number;
-  exams: number;
-}
-*/
+
 type CourseBatchItem = {
-  courseId: string
+  courseId: string;
   courseName: string;
   batchId: string;
   batchName: string;
+};
+
+const AnimatedCount = ({ value }: { value: number }) => {
+  const [display, setDisplay] = React.useState(0);
+  useEffect(() => {
+    let start = 0;
+    const end = value;
+    if (start === end) return;
+    let increment = end > start ? 1 : -1;
+    let stepTime = 20;
+    const timer = setInterval(() => {
+      start += increment;
+      setDisplay(start);
+      if (start === end) clearInterval(timer);
+    }, stepTime);
+    return () => clearInterval(timer);
+  }, [value]);
+  return <span>{display}</span>;
 };
 
 const TeacherDashboard = ({ onLogout }: { onLogout?: () => void }) => {
   const token = localStorage.getItem('token');
 
   const [counts, setCounts] = useState({ courses: 0, batches: 0, exams: 0 });
-  // Data from backend (simulate with state/fetch)
   const [courseBatchList, setCourseBatchList] = useState<CourseBatchItem[]>([]);
   const [examRecords, setExamRecords] = useState<ExamRecord[]>([]);
   const [courses, setCourses] = useState<any[]>([]);
   const [batches, setBatches] = useState<any[]>([]);
   const [profileData, setProfileData] = useState({ name: "", email: "", role: "" });
 
-  // UI state
   const [activePage, setActivePage] = useState("home");
   const [selectedCourse, setSelectedCourse] = useState("");
   const [selectedBatch, setSelectedBatch] = useState("");
   const [showSidebar, setShowSidebar] = useState(true);
-  const [showExamMsg] = useState(false);
+  const [showExamMsg, setShowExamMsg] = useState(false);
   const [showRoleMsg, setShowRoleMsg] = useState(false);
   const [showProfileMsg] = useState(false);
-  //const [profileSaved, setProfileSaved] = useState(false);
   const [allUsers, setAllUsers] = useState<{ role: string; email: string; name: string }[]>([]);
   const [showProfilePopup, setShowProfilePopup] = useState(false);
   const [roleEmail, setRoleEmail] = useState("");
@@ -60,42 +77,47 @@ const TeacherDashboard = ({ onLogout }: { onLogout?: () => void }) => {
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
   const [numQuestions, setNumQuestions] = useState(0);
+  const [k, setK] = useState(0);
+  const [solutions, setSolutions] = useState<File | null>(null);
 
-
-  // Validation errors for profile
-  //const [profileErrors, setProfileErrors] = useState<{ name?: string, email?: string }>({});
-
+  const [showEnrollModal, setShowEnrollModal] = useState(false);
+  const [enrollCourse, setEnrollCourse] = useState("");
+  const [enrollBatch, setEnrollBatch] = useState("");
+  const [studentName, setStudentName] = useState("");
+  const [studentEmail, setStudentEmail] = useState("");
+  const [enrolledStudents, setEnrolledStudents] = useState<Record<string, {name: string, email: string}[]>>({});
+  const [enrollSuccess, setEnrollSuccess] = useState(false);
+  const [csvFileName, setCsvFileName] = useState('');
   const [darkMode, setDarkMode] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [enrollError, setEnrollError] = useState('');
 
   useEffect(() => {
-      if (darkMode) {
-        document.documentElement.classList.add('dark');
-      } else {
-        document.documentElement.classList.remove('dark');
-      }
-    }, [darkMode]);
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [darkMode]);
 
-    const toggleDarkMode = () => {
-      setDarkMode(!darkMode);
-      document.documentElement.classList.toggle('dark');
-    };
-  
-  //Dashboard counts
+  const toggleDarkMode = () => {
+    setDarkMode(!darkMode);
+    document.documentElement.classList.toggle('dark');
+  };
+
   useEffect(() => {
-      fetch(`http://localhost:${PORT}/api/dashboard/counts`)
-        .then(res => res.json())
-        .then(data => {
-          setCounts({
-            courses: data.courses,
-            batches: data.batches,
-            exams: data.exams,
-          });
-        })
-        .catch(err => console.error('Failed to fetch dashboard counts:', err));
-    }, []);
+    fetch(`http://localhost:${PORT}/api/dashboard/counts`)
+      .then(res => res.json())
+      .then(data => {
+        setCounts({
+          courses: data.courses,
+          batches: data.batches,
+          exams: data.exams,
+        });
+      })
+      .catch(err => console.error('Failed to fetch dashboard counts:', err));
+  }, []);
 
-  // Fetch profile data
   useEffect(() => {
     fetch(`http://localhost:${PORT}/api/dashboard/profile`, {
       headers: {
@@ -108,116 +130,183 @@ const TeacherDashboard = ({ onLogout }: { onLogout?: () => void }) => {
       })
       .then((data: { name: string, email: string, role: string }) => {
         setProfileData(data);
-        //setProfileSaved(!!data.name && !!data.email && !!data.role);
       })
       .catch(err => {
         console.error('Failed to fetch profile:', err);
       });
   }, []);
 
-  // Fetch batches when a course is selected
   useEffect(() => {
-  fetch(`http://localhost:${PORT}/api/teacher/teacher-courses`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  })
-    .then((res) => res.json())
-    .then((data) => {
-      setCourseBatchList(data);
+    fetch(`http://localhost:${PORT}/api/teacher/teacher-courses`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
     })
-    .catch((err) => {
-      console.error('Failed to fetch teacher courses:', err);
-    });
-}, []);
-
-  // Exam scheduling
-  
-      useEffect(() => {
-      fetch(`http://localhost:${PORT}/api/teacher/teacher-courses`, {
-        headers: { Authorization: `Bearer ${token}` }
+      .then((res) => res.json())
+      .then((data) => {
+        setCourseBatchList(data);
       })
-        .then(res => res.json())
-        .then(data => {
-          setCourses(data.map((d: any) => ({ id: d.courseId, name: d.courseName })));
-          setBatches(data.map((d: any) => ({ id: d.batchId, name: d.batchName })));
-        });
-    }, []);
+      .catch((err) => {
+        console.error('Failed to fetch teacher courses:', err);
+      });
+  }, []);
 
-    const fetchExamRecords = () => {
-      fetch(`http://localhost:${PORT}/api/teacher/exams`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-        .then(res => res.json())
-        .then(data => setExamRecords(data));
-    };
-
-    useEffect(() => {
-      fetchExamRecords();
-    }, []);
-
-    const handleExamSchedule = () => {
-      fetch(`http://localhost:${PORT}/api/teacher/schedule-exam`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          courseId: selectedCourse,
-          batchId: selectedBatch,
-          title: examTitle,
-          startTime,
-          endTime,
-          numQuestions,
-        }),
-      })
-        .then(res => res.json())
-        .then(() => {
-          setSelectedCourse('');
-          setSelectedBatch('');
-          setExamTitle('');
-          setStartTime('');
-          setEndTime('');
-          setNumQuestions(0);
-          fetchExamRecords(); // Refresh
-        });
-    };
-
-
-  // Role update
-  const fetchAllUsers = () => {
-      fetch(`http://localhost:${PORT}/api/teacher/users`)
-        .then(res => res.json())
-        .then(data => {
-          setAllUsers(data);
-        })
-        .catch(err => console.error('Failed to fetch users:', err));
-    };
   useEffect(() => {
-      fetchAllUsers();
-    }, []);
-  const handleRoleUpdate = () => {
-      fetch(`http://localhost:${PORT}/api/teacher/update-role`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ email: roleEmail, role: roleType })
-      })
-        .then(() => {
-          setShowRoleMsg(true);
-          setTimeout(() => setShowRoleMsg(false), 1200); // fast hide
-          fetchAllUsers();
-          setRoleEmail('');
-          setRoleType('student');
-        });
+    fetch(`http://localhost:${PORT}/api/teacher/teacher-courses`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(res => res.json())
+      .then(data => {
+        setCourses(data.map((d: any) => ({ id: d.courseId, name: d.courseName })));
+        setBatches(data.map((d: any) => ({ id: d.batchId, name: d.batchName })));
+      });
+  }, []);
+
+  const fetchExamRecords = () => {
+    fetch(`http://localhost:${PORT}/api/teacher/exams`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+      .then(res => res.json())
+      .then(data => setExamRecords(data));
   };
 
-  // Profile icon SVG (solid avatar style)
+  useEffect(() => {
+    fetchExamRecords();
+  }, []);
+
+  const calculateDuration = (start: string, end: string) => {
+    if (!start || !end) return "0 mins";
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+    const diff = endDate.getTime() - startDate.getTime();
+    const minutes = Math.floor(diff / (1000 * 60));
+    return `${minutes} mins`;
+  };
+
+  const handleExamSchedule = () => {
+    fetch(`http://localhost:${PORT}/api/teacher/schedule-exam`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        courseId: selectedCourse,
+        batchId: selectedBatch,
+        title: examTitle,
+        startTime,
+        endTime,
+        numQuestions,
+        k,
+        solutions: solutions?.name || "",
+        duration: calculateDuration(startTime, endTime),
+        totalMarks: numQuestions * 10,
+        totalStudents: 0
+      }),
+    })
+      .then(res => res.json())
+      .then(() => {
+        setSelectedCourse('');
+        setSelectedBatch('');
+        setExamTitle('');
+        setStartTime('');
+        setEndTime('');
+        setNumQuestions(0);
+        setK(0);
+        setSolutions(null);
+        setShowExamMsg(true);
+        setTimeout(() => setShowExamMsg(false), 1200);
+        fetchExamRecords();
+      });
+  };
+
+  const handleEnrollStudent = (course: string, batch: string) => {
+    setEnrollCourse(course);
+    setEnrollBatch(batch);
+    setShowEnrollModal(true);
+  };
+
+  const handleEnrollSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const key = `${enrollCourse}_${enrollBatch}`;
+    const manual = studentName.trim() && studentEmail.trim();
+    const csvStudents = (enrolledStudents[key]?.length || 0) > 0;
+
+    if (!manual && !csvStudents) {
+     setEnrollError("Please upload a CSV file.");
+      return;
+    }
+
+    if (manual) {
+      setEnrolledStudents(prev => ({
+        ...prev,
+        [key]: [...(prev[key] || []), { name: studentName, email: studentEmail }]
+      }));
+    }
+
+    setEnrollSuccess(true);
+    setTimeout(() => {
+      setShowEnrollModal(false);
+      setEnrollSuccess(false);
+      setStudentName("");
+      setStudentEmail("");
+    }, 1000);
+  };
+
+  const downloadCSV = (course: string, batch: string) => {
+    const key = `${course}_${batch}`;
+    const students = enrolledStudents[key] || [];
+    let csv = "Name,Email,Course,Batch\n";
+    students.forEach(s => {
+      csv += `"${s.name}","${s.email}","${course}","${batch}"\n`;
+    });
+    if (students.length === 0) {
+      csv += "No students enrolled,,,\n";
+    }
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${course}_${batch}_students.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const fetchAllUsers = () => {
+    fetch(`http://localhost:${PORT}/api/teacher/users`)
+      .then(res => res.json())
+      .then(data => {
+        setAllUsers(data);
+      })
+      .catch(err => console.error('Failed to fetch users:', err));
+  };
+
+  useEffect(() => {
+    fetchAllUsers();
+  }, []);
+
+  const handleRoleUpdate = () => {
+    fetch(`http://localhost:${PORT}/api/teacher/update-role`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({ email: roleEmail, role: roleType })
+    })
+      .then(() => {
+        setShowRoleMsg(true);
+        setTimeout(() => setShowRoleMsg(false), 1200);
+        fetchAllUsers();
+        setRoleEmail('');
+        setRoleType('student');
+      });
+  };
+
   const ProfileSVG = () => (
     <svg width="38" height="38" viewBox="0 0 38 38" fill="none">
       <circle cx="19" cy="19" r="19" fill="#57418d" />
@@ -226,7 +315,6 @@ const TeacherDashboard = ({ onLogout }: { onLogout?: () => void }) => {
     </svg>
   );
 
-  // Dialog Box
   const DialogBox = ({
     show,
     message,
@@ -249,164 +337,245 @@ const TeacherDashboard = ({ onLogout }: { onLogout?: () => void }) => {
     );
   };
 
-  // Main pages
+  // --- Home page: NEW INTERACTIVE UI ---
   const pages: Record<string, JSX.Element> = {
     home: (
-    <div className="flex flex-col items-center justify-start w-full h-full pt-10 pb-4">
-      <h1 className="text-4xl font-bold text-[#38365e] text-center mb-6">
-        Welcome to Teacher Dashboard
-      </h1>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 px-6 mt-6 w-full max-w-5xl">
-        {[
-          { icon: FiBook, label: 'Courses', count: counts.courses, color: 'bg-blue-600' },
-          { icon: FiUsers, label: 'Batches', count: counts.batches, color: 'bg-green-600' },
-          { icon: FiEdit, label: 'Exams', count: counts.exams, color: 'bg-red-600' },
-        ].map(c => (
-          <div key={c.label} className={`${c.color} p-6 rounded-3xl text-white flex flex-col justify-center items-center h-40`}>
-            <c.icon className="mb-2" size={40} />
-            <h3 className="text-lg font-semibold">{c.label}</h3>
-            <p className="text-3xl font-bold">{c.count}</p>
-          </div>
-        ))}
-      </div>
-      <div className="mt-10 flex flex-col md:flex-row justify-center gap-6 w-full max-w-2xl">
-      <button
-        onClick={() => setActivePage('courses')}
-        className="bg-purple-700 text-white px-10 py-4 text-lg rounded-3xl"
+     <motion.div
+  className="flex flex-col items-center justify-start w-full h-full pt-10 pb-4 animate-fadein"
+  initial={{ opacity: 0, y: 30 }}
+  animate={{ opacity: 1, y: 0 }}
+  transition={{ duration: 0.7, ease: "easeOut" }}
+>
+ <h1 className="text-4xl font-extrabold mb-4 text-[#38365e] text-center drop-shadow">
+  Welcome, Teacher!
+</h1>
+<p className="text-gray-700 text-base whitespace-nowrap">
+  Make teaching easier – manage your courses, batches, and exams from one place.
+</p>
+
+  <div className="grid grid-cols-1 md:grid-cols-3 gap-8 px-6 mt-10 w-full max-w-5xl">
+
+    {[
+      {
+        icon: FiBook,
+        label: 'Courses',
+        count: counts.courses,
+        gradient: 'from-blue-400 via-blue-600 to-cyan-500', // Blue gradient
+        shadow: 'shadow-blue-300/50',
+        page: 'courses'
+      },
+      {
+        icon: FiUsers,
+        label: 'Batches',
+        count: counts.batches,
+        gradient: 'from-green-400 via-green-600 to-emerald-400', // Green gradient
+        shadow: 'shadow-green-300/50',
+        page: 'courses'
+      },
+      {
+        icon: FiEdit,
+        label: 'Exams',
+        count: counts.exams,
+        gradient: 'from-pink-500 via-red-500 to-orange-500', // Red gradient
+        shadow: 'shadow-red-300/50',
+        page: 'exams'
+      },
+    ].map((c) => (
+      <motion.div
+        key={c.label}
+        className={`
+          bg-gradient-to-br ${c.gradient} ${c.shadow}
+          p-8 rounded-3xl text-white flex flex-col justify-center items-center h-48 transition 
+          hover:scale-105 hover:shadow-2xl cursor-pointer relative group
+        `}
+        whileHover={{ y: -8, scale: 1.05 }}
+        whileTap={{ scale: 0.98 }}
+        transition={{ type: "spring", stiffness: 200, damping: 20 }}
+        onClick={() => setActivePage(c.page)}
       >
-        Manage Courses
-      </button>
-      <button
-        onClick={() => setActivePage('exams')}
-        className="bg-purple-700 text-white px-10 py-4 text-lg rounded-3xl"
-      >
-        Schedule Exams
-      </button>
-              </div>
-            </div>
-          ),
+        <span className="absolute top-4 right-4 bg-white/20 rounded-full p-1 group-hover:bg-white/40 transition">
+          <c.icon className="text-4xl drop-shadow-lg" />
+        </span>
+        <h3 className="text-xl font-bold mt-6 mb-1">{c.label}</h3>
+        <p className="text-5xl font-extrabold tracking-wider drop-shadow-lg">
+          <AnimatedCount value={c.count} />
+        </p>
+      </motion.div>
+    ))}
+  </div>
+  <div className="mt-12 flex flex-col md:flex-row justify-center gap-8 w-full max-w-2xl">
+    <motion.button
+      onClick={() => setActivePage('courses')}
+      className="flex items-center gap-2 bg-gradient-to-r from-[#57418d] to-[#7b2ff2] hover:from-[#7b2ff2] hover:to-[#57418d] text-white px-12 py-4 text-lg rounded-full font-semibold shadow-lg hover:scale-105 transition"
+      whileHover={{ scale: 1.07 }}
+      whileTap={{ scale: 0.96 }}
+    >
+      <FiBook className="text-2xl" />
+      Manage Courses
+    </motion.button>
+    <motion.button
+      onClick={() => setActivePage('exams')}
+      className="flex items-center gap-2 bg-gradient-to-r from-[#ff512f] to-[#dd2476] hover:from-[#dd2476] hover:to-[#ff512f] text-white px-12 py-4 text-lg rounded-full font-semibold shadow-lg hover:scale-105 transition"
+      whileHover={{ scale: 1.07 }}
+      whileTap={{ scale: 0.96 }}
+    >
+      <FiEdit className="text-2xl" />
+      Schedule Exams
+    </motion.button>
+  </div>
+</motion.div>
+    ),
+    // --- the rest of your pages remain the same ---
     roleManager: (
-      <div className="flex flex-col items-center justify-start w-full h-full pt-10 pb-4">
-        <h2 className="text-3xl font-bold text-[#38365e] text-center mb-8">Role Manager</h2>
-        <div className="w-full flex flex-col items-start px-6 max-w-xl">
-          <p className="mb-8 text-[#38365e] text-left">
-            Update the role of a user by selecting their name and their new role.
-          </p>
-          <form
-            name="roleUpdateForm"
-            id="roleUpdateForm"
-            className="flex flex-col gap-6 w-full"
-            onSubmit={e => {
-              e.preventDefault();
-              handleRoleUpdate();
-            }}
+      <motion.div
+    className="flex flex-col items-center justify-center w-full h-full pt-10 pb-4"
+    initial={{ opacity: 0, y: 30 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ duration: 0.6, ease: "easeOut" }}
+  >
+    <motion.div
+      className="bg-gradient-to-br from-[#e0c3fc] via-[#8ec5fc] to-[#a9c9ff] shadow-2xl rounded-3xl border border-white/60 px-10 py-12 max-w-lg w-full flex flex-col items-center relative"
+      initial={{ scale: 0.97 }}
+      animate={{ scale: 1 }}
+      transition={{ duration: 0.6, ease: "easeOut" }}
+    >
+      <div className="absolute -top-10 left-1/2 -translate-x-1/2 flex justify-center">
+        <div className="bg-gradient-to-br from-[#57418d] to-[#7b2ff2] p-4 rounded-full shadow-lg">
+          <FiUserCheck className="text-white text-4xl" />
+        </div>
+      </div>
+      <h2 className="text-3xl font-extrabold mb-2 text-[#38365e] text-center drop-shadow mt-6">
+        Role Manager
+      </h2>
+      <p className="mb-8 text-[#57418d] text-center text-base font-medium">
+       Assign and update user roles efficiently.
+      </p>
+      <form
+        name="roleUpdateForm"
+        id="roleUpdateForm"
+        className="flex flex-col gap-8 w-full"
+        onSubmit={e => {
+          e.preventDefault();
+          handleRoleUpdate();
+        }}
+      >
+        <div className="flex flex-col gap-2 w-full">
+          <label className="text-[#57418d] font-semibold">Select User</label>
+          <select
+            name="selectUser"
+            id="selectUser"
+            value={roleEmail}
+            onChange={(e) => setRoleEmail(e.target.value)}
+            className="border-2 border-purple-200 focus:border-purple-400 px-4 py-3 rounded-xl w-full shadow-md transition bg-white"
+            required
           >
-            <div className="flex flex-col items-start gap-1 w-full">
-              {/* <label className="text-[#38365e] font-semibold mb-1">Email ID</label> */}
-              {/* Drop down for selecting user */}
-              <div className="flex flex-col items-start gap-1 w-full">
-                <label className="text-[#38365e] font-semibold mb-1">Select User</label>
-                <select
-                  name="selectUser"
-                  id="selectUser"
-                  value={roleEmail}
-                  onChange={(e) => setRoleEmail(e.target.value)}
-                  className="border focus:border-blue-400 px-4 py-2 rounded-xl w-full"
-                  required
-                >
-                  <option value="">Select User</option>
-
-                  <optgroup label="Teaching Assistants (TAs)">
-                    {allUsers
-                      .filter(user => user.role === 'ta')
-                      .map(user => (
-                        <option key={user.email} value={user.email}>
-                          {user.name} ({user.email})
-                        </option>
-                      ))}
-                  </optgroup>
-
-                  <optgroup label="Students">
-                    {allUsers
-                      .filter(user => user.role === 'student')
-                      .map(user => (
-                        <option key={user.email} value={user.email}>
-                          {user.name} ({user.email})
-                        </option>
-                      ))}
-                  </optgroup>
-                </select>
-              </div>
-            </div>
-            <div className="flex flex-col items-start gap-1 w-full">
-              <label className="text-[#38365e] font-semibold mb-1">Select Role</label>
-              <select
-                name="selectRole"
-                id="selectRole"
-                className="border focus:border-blue-400 px-4 py-2 rounded-xl w-full"
-                value={roleType}
-                onChange={e => setRoleType(e.target.value)}
-              >
-                <option value="student">Student</option>
-                <option value="ta">Teaching Assistant (TA)</option>
-              </select>
-            </div>
-            <button
-              type="submit"
-              className="bg-[#57418d] text-white px-7 py-2 rounded-2xl font-semibold shadow transition hover:bg-[#402b6c] mt-2"
-              style={{ minWidth: 140 }}
-            >
-              Update Role
-            </button>
-          </form>
+            <option value="">Select User</option>
+            <optgroup label="Teaching Assistants (TAs)">
+              {allUsers
+                .filter(user => user.role === 'ta')
+                .map(user => (
+                  <option key={user.email} value={user.email}>
+                    {user.name} ({user.email})
+                  </option>
+                ))}
+            </optgroup>
+            <optgroup label="Students">
+              {allUsers
+                .filter(user => user.role === 'student')
+                .map(user => (
+                  <option key={user.email} value={user.email}>
+                    {user.name} ({user.email})
+                  </option>
+                ))}
+            </optgroup>
+          </select>
         </div>
-      </div>
+        <div className="flex flex-col gap-2 w-full">
+          <label className="text-[#57418d] font-semibold">Select Role</label>
+          <select
+            name="selectRole"
+            id="selectRole"
+            className="border-2 border-purple-200 focus:border-purple-400 px-4 py-3 rounded-xl w-full shadow-md transition bg-white"
+            value={roleType}
+            onChange={e => setRoleType(e.target.value)}
+          >
+            <option value="student">Student</option>
+            <option value="ta">Teaching Assistant (TA)</option>
+          </select>
+        </div>
+        <motion.button
+          type="submit"
+          className="mt-2 bg-gradient-to-r from-[#57418d] to-[#7b2ff2] hover:from-[#7b2ff2] hover:to-[#57418d] text-white px-8 py-3 rounded-full font-semibold shadow-xl hover:scale-105 transition text-lg tracking-wide"
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.97 }}
+          style={{ minWidth: 160 }}
+        >
+          Update Role
+        </motion.button>
+      </form>
+    </motion.div>
+  </motion.div>
     ),
-    courses: (
-      <div className="flex flex-col items-center justify-start w-full h-full pt-10 pb-4">
-        <h2 className="text-3xl font-bold mb-10 text-[#38365e] text-center">Courses and Batches</h2>
-        <div className="w-full max-w-5xl">
-          <table className="w-full border-separate border-spacing-y-4">
-            <thead>
-              <tr>
-                <th className="bg-[#57418d] text-white py-3 px-6 rounded-l-2xl text-lg font-semibold text-center">
-                  Course Name
-                </th>
-                <th className="bg-[#57418d] text-white py-3 px-6 text-lg font-semibold text-center">
-                  Batch Name
-                </th>
-                <th className="bg-[#57418d] text-white py-3 px-6 rounded-r-2xl text-lg font-semibold text-center">
-                  Actions
-                </th>
+  courses: (
+  <div className="flex flex-col items-center justify-start w-full h-full pt-10 pb-4">
+    <h2 className="text-3xl font-extrabold mb-10 text-[#38365e] text-center drop-shadow">
+      Courses and Batches
+    </h2>
+    <div className="w-full max-w-5xl">
+      <table className="w-full border-separate border-spacing-y-4">
+        <thead>
+          <tr>
+            <th className="bg-[#57418d] text-white py-4 px-6 rounded-l-2xl text-lg font-semibold text-center tracking-wide">
+              Course Name
+            </th>
+            <th className="bg-[#57418d] text-white py-4 px-6 text-lg font-semibold text-center tracking-wide">
+              Batch Name
+            </th>
+            <th className="bg-[#57418d] text-white py-4 px-6 rounded-r-2xl text-lg font-semibold text-center tracking-wide">
+              Actions
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {courseBatchList.length > 0 ? (
+            courseBatchList.map((row, idx) => (
+              <tr key={idx} className="hover:bg-purple-50 transition">
+                <td className="px-6 py-4 text-center text-base font-medium">{row.courseName}</td>
+                <td className="px-6 py-4 text-center text-base font-medium">{row.batchName}</td>
+                <td className="px-6 py-4 text-center text-base flex gap-2 justify-center">
+                  {/* Enroll Student Button (with CSV) */}
+                  <button
+                    onClick={() => handleEnrollStudent(row.courseName, row.batchName)}
+                    className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-400 via-green-500 to-emerald-400 text-white font-semibold rounded-2xl shadow-md hover:from-green-500 hover:to-emerald-500 hover:scale-105 transition-all duration-150"
+                  >
+                    <FiUserPlus className="text-lg" /> Enroll Student
+                  </button>
+                  {/* Download CSV Button */}
+                  <button
+                    onClick={() => downloadCSV(row.courseName, row.batchName)}
+                    className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-400 via-blue-500 to-cyan-400 text-white font-semibold rounded-2xl shadow-md hover:from-blue-500 hover:to-cyan-500 hover:scale-105 transition-all duration-150"
+                  >
+                    <FiDownload className="text-lg" /> Download CSV
+                  </button>
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {courseBatchList.length > 0 ? (
-                courseBatchList.map((row, idx) => (
-                  <tr key={idx}>
-                    <td className="px-6 py-4 text-center text-base">{row.courseName}</td>
-                    <td className="px-6 py-4 text-center text-base">{row.batchName}</td>
-                    <td className="px-6 py-4 text-center text-base">-</td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={3} className="text-center text-gray-500 py-4">
-                    No courses and batches added yet
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    ),
+            ))
+          ) : (
+            <tr>
+              <td colSpan={3} className="text-center text-gray-400 py-12 text-lg font-semibold">
+                No courses and batches added yet
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  </div>
+),
     exams: (
       <div className="flex flex-col items-center justify-start w-full h-full pt-10 pb-4">
         <h2 className="text-3xl font-bold mb-10 text-[#38365e] text-center">Exam Management</h2>
         <div className="w-full flex flex-col gap-6 max-w-2xl mb-4">
-
-          {/* Row 1: Course & Batch */}
           <div className="flex flex-row gap-8">
             <div className="flex flex-col flex-1">
               <label className="text-[#38365e] font-semibold mb-1">Course</label>
@@ -448,7 +617,6 @@ const TeacherDashboard = ({ onLogout }: { onLogout?: () => void }) => {
             </div>
           </div>
 
-          {/* Row 2: Title & Question Count */}
           <div className="flex flex-row gap-8">
             <div className="flex flex-col flex-1">
               <label className="text-[#38365e] font-semibold mb-1">Exam Title</label>
@@ -472,7 +640,6 @@ const TeacherDashboard = ({ onLogout }: { onLogout?: () => void }) => {
             </div>
           </div>
 
-          {/* Row 3: Start & End Time */}
           <div className="flex flex-row gap-8">
             <div className="flex flex-col flex-1">
               <label className="text-[#38365e] font-semibold mb-1">Start Time</label>
@@ -494,15 +661,51 @@ const TeacherDashboard = ({ onLogout }: { onLogout?: () => void }) => {
             </div>
           </div>
 
-          {/* Schedule Button */}
+          <div className="flex flex-row gap-8">
+            <div className="flex flex-col flex-1">
+              <label className="text-[#38365e] font-semibold mb-1">No. of Peers (K)</label>
+              <input
+                type="number"
+                min="1"
+                value={k}
+                onChange={(e) => setK(Number(e.target.value))}
+                className="border-2 border-[#b3aedd] px-4 py-2 rounded-xl outline-none"
+                placeholder="e.g. 3"
+              />
+            </div>
+            <div className="flex flex-col flex-1">
+              <label className="text-[#38365e] font-semibold mb-1">Solutions</label>
+              <div className="flex items-center">
+                <label className="mr-2">
+                  <input
+                    type="file"
+                    onChange={(e) => setSolutions(e.target.files ? e.target.files[0] : null)}
+                    className="hidden"
+                    id="solution-file"
+                  />
+                  <span
+                    className="inline-block px-3 py-1 bg-[#232323] text-white rounded cursor-pointer"
+                    style={{ fontWeight: 500 }}
+                    onClick={() => document.getElementById('solution-file')?.click()}
+                  >
+                    Choose File
+                  </span>
+                </label>
+                <span className="ml-2 text-sm text-gray-700">
+                  {solutions ? solutions.name : "No file chosen"}
+                </span>
+              </div>
+            </div>
+          </div>
+
           <div className="flex justify-end mt-2">
             <button
               onClick={handleExamSchedule}
               disabled={
-                !selectedCourse || !selectedBatch || !examTitle || !startTime || !endTime || numQuestions <= 0
+                !selectedCourse || !selectedBatch || !examTitle || !startTime || !endTime || numQuestions <= 0 || k <= 0
               }
               className={`px-6 py-2 rounded-2xl font-semibold shadow transition text-white text-base ${
-                selectedCourse && selectedBatch && examTitle && startTime && endTime && numQuestions > 0
+                selectedCourse && selectedBatch && examTitle && startTime && endTime && numQuestions > 0 && k > 0
                   ? 'bg-[#57418d] hover:bg-[#402b6c]'
                   : 'bg-gray-400 cursor-not-allowed'
               }`}
@@ -512,7 +715,6 @@ const TeacherDashboard = ({ onLogout }: { onLogout?: () => void }) => {
           </div>
         </div>
 
-        {/* Exam List */}
         <div className="w-full max-w-5xl mt-10">
           <table className="w-full border-separate border-spacing-y-4">
             <thead>
@@ -524,16 +726,25 @@ const TeacherDashboard = ({ onLogout }: { onLogout?: () => void }) => {
                   Course
                 </th>
                 <th className="bg-[#57418d] text-white py-3 px-6 text-lg font-semibold text-center">
-                  Batch 
+                  Batch
                 </th>
                 <th className="bg-[#57418d] text-white py-3 px-6 text-lg font-semibold text-center">
-                 Start Time
+                  Duration
                 </th>
                 <th className="bg-[#57418d] text-white py-3 px-6 text-lg font-semibold text-center">
-                  End Time
+                  Total Marks
+                </th>
+                <th className="bg-[#57418d] text-white py-3 px-6 text-lg font-semibold text-center">
+                  K
+                </th>
+                <th className="bg-[#57418d] text-white py-3 px-6 text-lg font-semibold text-center">
+                  Total Students
+                </th>
+                <th className="bg-[#57418d] text-white py-3 px-6 text-lg font-semibold text-center">
+                  Solutions
                 </th>
                 <th className="bg-[#57418d] text-white py-3 px-6 rounded-r-2xl text-lg font-semibold text-center">
-                  Questions
+                  Actions
                 </th>
               </tr>
             </thead>
@@ -544,14 +755,28 @@ const TeacherDashboard = ({ onLogout }: { onLogout?: () => void }) => {
                     <td className="px-6 py-4 text-center text-base">{ex.title}</td>
                     <td className="px-6 py-4 text-center text-base">{ex.course}</td>
                     <td className="px-6 py-4 text-center text-base">{ex.batch}</td>
-                    <td className="px-6 py-4 text-center text-base">{ex.startTime}</td>
-                    <td className="px-6 py-4 text-center text-base">{ex.endTime}</td>
-                    <td className="px-6 py-4 text-center text-base">{ex.numQuestions}</td>
+                    <td className="px-6 py-4 text-center text-base">{calculateDuration(ex.startTime, ex.endTime)}</td>
+                    <td className="px-6 py-4 text-center text-base">{ex.numQuestions * 10}</td>
+                    <td className="px-6 py-4 text-center text-base">{ex.k || '-'}</td>
+                    <td className="px-6 py-4 text-center text-base">{ex.totalStudents || '-'}</td>
+                    <td className="px-6 py-4 text-center text-base">
+                      <button className="text-blue-600 hover:text-blue-800">
+                        View Solutions
+                      </button>
+                    </td>
+                    <td className="px-6 py-4 text-center text-base flex gap-2 justify-center">
+                      <button className="text-blue-600 hover:text-blue-800">
+                        View
+                      </button>
+                      <button className="text-green-600 hover:text-green-800">
+                        Solutions
+                      </button>
+                    </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={3} className="text-center text-gray-500 py-4">
+                  <td colSpan={9} className="text-center text-gray-500 py-4">
                     No exams scheduled yet
                   </td>
                 </tr>
@@ -564,9 +789,13 @@ const TeacherDashboard = ({ onLogout }: { onLogout?: () => void }) => {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ background: "linear-gradient(180deg,#ffe3ec 80%,#f0f0f5 100%)" }}>
-      {/* Sidebar */}
-      <div className={`${showSidebar ? 'w-64' : 'w-20'} bg-gradient-to-b from-[#493a6b] to-[#2D2150] text-white flex flex-col justify-between py-6 px-4 rounded-r-3xl transition-all duration-300`}>
+    <div
+      className="flex h-screen overflow-hidden backdrop-blur-xl"
+      style={{
+        background: "linear-gradient(135deg, rgb(168, 184, 208) 0%, rgb(183, 64, 173) 100%)"
+      }}
+    >
+<div className={`${showSidebar ? 'w-64' : 'w-20'} bg-gradient-to-b from-[#2b2e4a] via-[#5636b8] to-[#231942] text-white flex flex-col justify-between py-6 px-4 rounded-r-3xl shadow-2xl transition-all duration-300`}>
         <button
           onClick={() => setShowSidebar(!showSidebar)}
           className="self-start mb-6 p-2 border-2 border-transparent hover:border-blue-300 rounded-full active:scale-95 transition"
@@ -582,28 +811,32 @@ const TeacherDashboard = ({ onLogout }: { onLogout?: () => void }) => {
               const icons: Record<string, any> = { home: FiHome, roleManager: FiShield, courses: FiBook, exams: FiEdit };
               const Icon = icons[key];
               return (
-                <li key={key} onClick={() => setActivePage(key)}
-                  className={`cursor-pointer ${activePage === key ? 'bg-[#57418d]' : ''} flex items-center px-4 py-2 rounded transition`}>
-                  <Icon className={`transition-all ${showSidebar ? 'mr-2 text-xl' : 'text-3xl'} ${!showSidebar ? 'text-3xl md:text-4xl' : ''}`} />
-                  {
-                    showSidebar && (key === 'roleManager' ? 'Manage Roles' : key.charAt(0).toUpperCase() + key.slice(1))
-                  }
-                </li>
+                <li
+  key={key}
+  onClick={() => setActivePage(key)}
+  className={`cursor-pointer 
+    ${activePage === key
+      ? 'bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 text-white font-bold shadow-lg scale-105'
+      : 'hover:bg-white/10 hover:scale-105'}
+    flex items-center px-4 py-2 rounded-xl transition-all duration-200`}
+>
+  <Icon className={`transition-all ${showSidebar ? 'mr-2 text-xl' : 'text-3xl'} ${!showSidebar ? 'text-3xl md:text-4xl' : ''}`} />
+  {showSidebar && (key === 'roleManager' ? 'Manage Roles' : key.charAt(0).toUpperCase() + key.slice(1))}
+</li>
               );
             })}
           </ul>
         </div>
         <button
           onClick={() => setLogoutDialog(true)}
-          className="flex items-center justify-center gap-2 hover:text-red-400 transition"
-        >
+          className="flex items-center justify-center gap-2 hover:bg-white/10 hover:text-red-400 px-4 py-2 rounded transition-all duration-200">
+        
           <FiLogOut className={`${showSidebar ? 'mr-2 text-xl' : 'text-3xl'} ${!showSidebar ? 'text-3xl md:text-4xl' : ''}`} />
           {showSidebar && 'Logout'}
         </button>
       </div>
-      {/* Main Content */}
+
       <div className="flex-1 relative overflow-y-auto flex justify-center items-start">
-        {/* Profile button */}
         <div className="absolute top-4 right-6 z-20">
           <button onClick={() => setShowProfilePopup(!showProfilePopup)}
             className="p-2 flex items-center justify-center rounded-full border-2 border-transparent hover:border-blue-300 transition active:scale-95 bg-white shadow"
@@ -630,7 +863,6 @@ const TeacherDashboard = ({ onLogout }: { onLogout?: () => void }) => {
                 </div>
                 <button
                   onClick={() => {
-                    //setActivePage("courses");
                     setShowProfilePopup(false);
                   }}
                   className="bg-purple-700 text-white px-4 py-2 rounded-3xl w-full"
@@ -640,9 +872,10 @@ const TeacherDashboard = ({ onLogout }: { onLogout?: () => void }) => {
               </div>
             )}
         </div>
-        {/* Single rounded main content area, always up towards the top, starting below the profile icon */}
+
         <div
-          className="bg-white rounded-3xl shadow-lg w-full h-auto mt-24 mb-8 mx-4 p-0 flex items-start justify-center overflow-auto max-w-6xl"
+         className="bg-white/90 rounded-3xl shadow-2xl w-full max-w-6xl h-auto mt-20 mb-10 mx-6 px-8 py-6 flex flex-col items-start justify-start overflow-auto backdrop-blur-sm"
+
           style={{
             minHeight: "calc(100vh - 120px)",
             boxShadow: '0 2px 24px 0 rgba(87,65,141,0.10)'
@@ -652,15 +885,141 @@ const TeacherDashboard = ({ onLogout }: { onLogout?: () => void }) => {
             {pages[activePage]}
           </div>
         </div>
+
         <DialogBox show={showProfileMsg} message="Profile Saved Successfully!" />
         <DialogBox show={showExamMsg} message="Exam Scheduled Successfully!" />
         <DialogBox show={showRoleMsg} message="Role Updated Successfully!" />
-        {/* Logout Dialog */}
+
+   {showEnrollModal && (
+   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+    <form
+      onSubmit={handleEnrollSubmit}
+      className="bg-white rounded-2xl shadow-xl px-8 py-8 flex flex-col items-center w-[350px] max-w-full"
+    >
+      <h2 className="text-2xl font-bold mb-6 text-center">Enroll Student</h2>
+      <div className="flex flex-col gap-3 w-full">
+        <div>
+          <label className="font-semibold">Course:</label>
+          <input
+            value={enrollCourse}
+            disabled
+            className="border px-3 py-2 rounded w-full mt-1 bg-gray-100"
+          />
+        </div>
+        <div>
+          <label className="font-semibold">Batch:</label>
+          <input
+            value={enrollBatch}
+            disabled
+            className="border px-3 py-2 rounded w-full mt-1 bg-gray-100"
+          />
+        </div>
+        {/* --- CSV Upload Block (UI only, no backend) --- */}
+        <div className="flex flex-col items-center w-full my-2">
+          <label className="font-semibold mb-2 text-center w-full">Bulk Enroll via CSV</label>
+          <input
+            type="file"
+            accept=".csv"
+            className="hidden"
+            id="csv-upload"
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              if (!file) {
+                setEnrollError("Please upload a CSV file.");
+                return;
+              }
+              if (!file.name.endsWith('.csv')) {
+                setEnrollError("Please upload a valid CSV file only.");
+                return;
+              }
+              setEnrollError('');
+              setCsvFileName(file.name);
+
+              // CSV Parse Logic
+              const text = await file.text();
+              const rows = text.split("\n").map(r => r.trim()).filter(Boolean);
+              let dataRows = rows;
+              if (rows[0].toLowerCase().includes('name') && rows[0].toLowerCase().includes('email')) {
+                dataRows = rows.slice(1);
+              }
+              const students = dataRows.map((row) => {
+                const [name, email] = row.split(",");
+                return { name: name?.trim(), email: email?.trim() };
+              }).filter(s => s.name && s.email);
+
+              // Add students to enrolledStudents state (frontend only)
+              const key = `${enrollCourse}_${enrollBatch}`;
+              setEnrolledStudents(prev => ({
+                ...prev,
+                [key]: [...(prev[key] || []), ...students]
+              }));
+            }}
+          />
+          <label
+            htmlFor="csv-upload"
+            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-green-400 via-green-500 to-emerald-400 text-white font-semibold rounded-2xl shadow hover:from-green-500 hover:to-emerald-500 hover:scale-105 transition-all cursor-pointer"
+            style={{ minWidth: 0 }}
+          >
+            <FiDownload className="text-lg" /> Choose CSV File
+          </label>
+          <span className="text-xs text-gray-500 mt-1">{csvFileName ? csvFileName : "No file chosen"}</span>
+          <span className="text-xs text-gray-500 mt-1">Upload a CSV file with columns: Name, Email</span>
+        </div>
+      </div>
+
+      {/* Error message block */}
+      {enrollError && (
+        <div className="mb-2 text-red-600 font-semibold text-center">
+          {enrollError}
+        </div>
+      )}
+
+      <div className="flex gap-4 mt-6">
+        <button
+          type="submit"
+          className="bg-[#57418d] text-white px-8 py-2 rounded-2xl font-semibold shadow transition hover:bg-[#402b6c]"
+        >
+          Enroll
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setShowEnrollModal(false);
+            setEnrollError('');
+          }}
+          className="bg-gray-200 text-gray-700 rounded-2xl px-8 py-2 font-semibold hover:bg-gray-300 transition"
+        >
+          Cancel
+        </button>
+      </div>
+      {enrollSuccess && (
+        <div className="mt-4 text-green-600 font-semibold text-center">
+          Student enrolled successfully!
+        </div>
+      )}
+      
+      <div className="mt-4 w-full">
+        <div className="font-semibold mb-1">Enrolled Students:</div>
+      <ul className="max-h-24 overflow-y-auto text-sm">
+  {(enrolledStudents[`${enrollCourse}_${enrollBatch}`] || []).length === 0 ? (
+    <li className="text-gray-400">No students enrolled yet.</li>
+  ) : (
+    (enrolledStudents[`${enrollCourse}_${enrollBatch}`] || []).map((s, i) => (
+      <li key={i} className="mb-1">
+        {s.name} ({s.email})
+      </li>
+    ))
+  )}
+</ul>
+      </div>
+    </form>
+  </div>
+)}
         <DialogBox show={logoutDialog} message="Are you sure you want to logout?">
           <div className="flex gap-8 mt-4">
             <button
               onClick={() => setLogoutDialog(false)}
-              className="bg-gray-200 text-gray-700 rounded-xl px-8 py-2 font-semibold hover:bg-gray-300 transition"
+              className="bg-gray-200 text-gray-700 roundeFd-xl px-8 py-2 font-semibold hover:bg-gray-300 transition"
             >
               No
             </button>
@@ -681,7 +1040,6 @@ const TeacherDashboard = ({ onLogout }: { onLogout?: () => void }) => {
         </DialogBox>
       </div>
 
-      {/* Settings Button */}
       <div className="absolute bottom-6 right-6 z-20">
         <button
           onClick={() => setShowSettings(!showSettings)}
