@@ -3,10 +3,9 @@ import type { JSX } from 'react';
 import {
   FiMenu, FiLogOut, FiHome,
   FiBook, FiUsers, FiEdit, FiShield,
-  FiDownload, FiUserPlus, FiUserCheck
+  FiDownload, FiUserPlus, FiUserCheck,
+  FiSend, FiTrash2
 } from 'react-icons/fi';
-
-// Optional: If you want animated numbers and motion, install framer-motion
 import { motion } from 'framer-motion';
 
 const PORT = import.meta.env.VITE_BACKEND_PORT || 5000;
@@ -66,7 +65,6 @@ const TeacherDashboard = ({ onLogout }: { onLogout?: () => void }) => {
   const [showSidebar, setShowSidebar] = useState(true);
   const [showExamMsg, setShowExamMsg] = useState(false);
   const [showRoleMsg, setShowRoleMsg] = useState(false);
-  const [showProfileMsg] = useState(false);
   const [allUsers, setAllUsers] = useState<{ role: string; email: string; name: string }[]>([]);
   const [showProfilePopup, setShowProfilePopup] = useState(false);
   const [roleEmail, setRoleEmail] = useState("");
@@ -80,14 +78,19 @@ const TeacherDashboard = ({ onLogout }: { onLogout?: () => void }) => {
   const [k, setK] = useState(0);
   const [solutions, setSolutions] = useState<File | null>(null);
 
+  // Exam extra modals
+  const [showExamModal, setShowExamModal] = useState(false);
+  const [showSolutionModal, setShowSolutionModal] = useState(false);
+  const [solutionModalFile, setSolutionModalFile] = useState('');
+  const [showSendDialog, setShowSendDialog] = useState(false);
+
   const [showEnrollModal, setShowEnrollModal] = useState(false);
   const [enrollCourse, setEnrollCourse] = useState("");
   const [enrollBatch, setEnrollBatch] = useState("");
-  const [studentName, setStudentName] = useState("");
-  const [studentEmail, setStudentEmail] = useState("");
-  const [enrolledStudents, setEnrolledStudents] = useState<Record<string, {name: string, email: string}[]>>({});
+  const [enrolledStudents, setEnrolledStudents] = useState<Record<string, { name: string, email: string }[]>>({});
   const [enrollSuccess, setEnrollSuccess] = useState(false);
   const [csvFileName, setCsvFileName] = useState('');
+  const [csvStudents, setCsvStudents] = useState<{ name: string, email: string }[]>([]);
   const [darkMode, setDarkMode] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [enrollError, setEnrollError] = useState('');
@@ -225,33 +228,40 @@ const TeacherDashboard = ({ onLogout }: { onLogout?: () => void }) => {
   const handleEnrollStudent = (course: string, batch: string) => {
     setEnrollCourse(course);
     setEnrollBatch(batch);
+    setCsvFileName('');
+    setEnrollError('');
+    setCsvStudents([]);
     setShowEnrollModal(true);
   };
 
   const handleEnrollSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const key = `${enrollCourse}_${enrollBatch}`;
-    const manual = studentName.trim() && studentEmail.trim();
-    const csvStudents = (enrolledStudents[key]?.length || 0) > 0;
 
-    if (!manual && !csvStudents) {
-     setEnrollError("Please upload a CSV file.");
+    if (csvStudents.length === 0) {
+      setEnrollError("Please upload a CSV file.");
       return;
     }
 
-    if (manual) {
-      setEnrolledStudents(prev => ({
-        ...prev,
-        [key]: [...(prev[key] || []), { name: studentName, email: studentEmail }]
-      }));
-    }
+    setEnrolledStudents(prev => ({
+      ...prev,
+      [key]: [
+        ...(prev[key] || []),
+        ...csvStudents.filter(
+          s => !(prev[key] || []).some(
+            ex => ex.email.toLowerCase() === s.email.toLowerCase() && ex.name.toLowerCase() === s.name.toLowerCase()
+          )
+        )
+      ]
+    }));
 
     setEnrollSuccess(true);
     setTimeout(() => {
       setShowEnrollModal(false);
       setEnrollSuccess(false);
-      setStudentName("");
-      setStudentEmail("");
+      setCsvStudents([]);
+      setCsvFileName('');
+      setEnrollError('');
     }, 1000);
   };
 
@@ -337,453 +347,461 @@ const TeacherDashboard = ({ onLogout }: { onLogout?: () => void }) => {
     );
   };
 
-  // --- Home page: NEW INTERACTIVE UI ---
   const pages: Record<string, JSX.Element> = {
     home: (
-     <motion.div
-  className="flex flex-col items-center justify-start w-full h-full pt-10 pb-4 animate-fadein"
-  initial={{ opacity: 0, y: 30 }}
-  animate={{ opacity: 1, y: 0 }}
-  transition={{ duration: 0.7, ease: "easeOut" }}
->
- <h1 className="text-4xl font-extrabold mb-4 text-[#38365e] text-center drop-shadow">
-  Welcome, Teacher!
-</h1>
-<p className="text-gray-700 text-base whitespace-nowrap">
-  Make teaching easier – manage your courses, batches, and exams from one place.
-</p>
-
-  <div className="grid grid-cols-1 md:grid-cols-3 gap-8 px-6 mt-10 w-full max-w-5xl">
-
-    {[
-      {
-        icon: FiBook,
-        label: 'Courses',
-        count: counts.courses,
-        gradient: 'from-blue-400 via-blue-600 to-cyan-500', // Blue gradient
-        shadow: 'shadow-blue-300/50',
-        page: 'courses'
-      },
-      {
-        icon: FiUsers,
-        label: 'Batches',
-        count: counts.batches,
-        gradient: 'from-green-400 via-green-600 to-emerald-400', // Green gradient
-        shadow: 'shadow-green-300/50',
-        page: 'courses'
-      },
-      {
-        icon: FiEdit,
-        label: 'Exams',
-        count: counts.exams,
-        gradient: 'from-pink-500 via-red-500 to-orange-500', // Red gradient
-        shadow: 'shadow-red-300/50',
-        page: 'exams'
-      },
-    ].map((c) => (
-      <motion.div
-        key={c.label}
-        className={`
-          bg-gradient-to-br ${c.gradient} ${c.shadow}
-          p-8 rounded-3xl text-white flex flex-col justify-center items-center h-48 transition 
-          hover:scale-105 hover:shadow-2xl cursor-pointer relative group
-        `}
-        whileHover={{ y: -8, scale: 1.05 }}
-        whileTap={{ scale: 0.98 }}
-        transition={{ type: "spring", stiffness: 200, damping: 20 }}
-        onClick={() => setActivePage(c.page)}
-      >
-        <span className="absolute top-4 right-4 bg-white/20 rounded-full p-1 group-hover:bg-white/40 transition">
-          <c.icon className="text-4xl drop-shadow-lg" />
-        </span>
-        <h3 className="text-xl font-bold mt-6 mb-1">{c.label}</h3>
-        <p className="text-5xl font-extrabold tracking-wider drop-shadow-lg">
-          <AnimatedCount value={c.count} />
+      <div className="flex flex-col items-center justify-start w-full h-full pt-10 pb-4 animate-fadein">
+        <h1 className="text-4xl font-extrabold mb-4 text-[#38365e] text-center drop-shadow">
+          Welcome, Teacher!
+        </h1>
+        <p className="text-gray-700 text-base whitespace-nowrap">
+          Make teaching easier – manage your courses, batches, and exams from one place.
         </p>
-      </motion.div>
-    ))}
-  </div>
-  <div className="mt-12 flex flex-col md:flex-row justify-center gap-8 w-full max-w-2xl">
-    <motion.button
-      onClick={() => setActivePage('courses')}
-      className="flex items-center gap-2 bg-gradient-to-r from-[#57418d] to-[#7b2ff2] hover:from-[#7b2ff2] hover:to-[#57418d] text-white px-12 py-4 text-lg rounded-full font-semibold shadow-lg hover:scale-105 transition"
-      whileHover={{ scale: 1.07 }}
-      whileTap={{ scale: 0.96 }}
-    >
-      <FiBook className="text-2xl" />
-      Manage Courses
-    </motion.button>
-    <motion.button
-      onClick={() => setActivePage('exams')}
-      className="flex items-center gap-2 bg-gradient-to-r from-[#ff512f] to-[#dd2476] hover:from-[#dd2476] hover:to-[#ff512f] text-white px-12 py-4 text-lg rounded-full font-semibold shadow-lg hover:scale-105 transition"
-      whileHover={{ scale: 1.07 }}
-      whileTap={{ scale: 0.96 }}
-    >
-      <FiEdit className="text-2xl" />
-      Schedule Exams
-    </motion.button>
-  </div>
-</motion.div>
-    ),
-    // --- the rest of your pages remain the same ---
-    roleManager: (
-      <motion.div
-    className="flex flex-col items-center justify-center w-full h-full pt-10 pb-4"
-    initial={{ opacity: 0, y: 30 }}
-    animate={{ opacity: 1, y: 0 }}
-    transition={{ duration: 0.6, ease: "easeOut" }}
-  >
-    <motion.div
-      className="bg-gradient-to-br from-[#e0c3fc] via-[#8ec5fc] to-[#a9c9ff] shadow-2xl rounded-3xl border border-white/60 px-10 py-12 max-w-lg w-full flex flex-col items-center relative"
-      initial={{ scale: 0.97 }}
-      animate={{ scale: 1 }}
-      transition={{ duration: 0.6, ease: "easeOut" }}
-    >
-      <div className="absolute -top-10 left-1/2 -translate-x-1/2 flex justify-center">
-        <div className="bg-gradient-to-br from-[#57418d] to-[#7b2ff2] p-4 rounded-full shadow-lg">
-          <FiUserCheck className="text-white text-4xl" />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 px-6 mt-10 w-full max-w-5xl">
+          {[
+            {
+              icon: FiBook,
+              label: 'Courses',
+              count: counts.courses,
+              gradient: 'from-blue-400 via-blue-600 to-cyan-500',
+              shadow: 'shadow-blue-300/50'
+            },
+            {
+              icon: FiUsers,
+              label: 'Batches',
+              count: counts.batches,
+              gradient: 'from-green-400 via-green-600 to-emerald-400',
+              shadow: 'shadow-green-300/50'
+            },
+            {
+              icon: FiEdit,
+              label: 'Exams',
+              count: counts.exams,
+              gradient: 'from-pink-500 via-red-500 to-orange-500',
+              shadow: 'shadow-red-300/50'
+            },
+          ].map((c) => (
+            <div
+              key={c.label}
+              className={`
+                bg-gradient-to-br ${c.gradient} ${c.shadow}
+                p-8 rounded-3xl text-white flex flex-col justify-center items-center h-48
+                relative
+              `}
+            >
+              <span className="absolute top-4 right-4 bg-white/20 rounded-full p-1">
+                <c.icon className="text-4xl drop-shadow-lg" />
+              </span>
+              <h3 className="text-xl font-bold mt-6 mb-1">{c.label}</h3>
+              <p className="text-5xl font-extrabold tracking-wider drop-shadow-lg">
+                <AnimatedCount value={c.count} />
+              </p>
+            </div>
+          ))}
+        </div>
+        <div className="mt-12 flex flex-col md:flex-row justify-center gap-8 w-full max-w-2xl">
+          <button
+            onClick={() => setActivePage('roleManager')}
+            className="flex items-center gap-2 bg-gradient-to-r from-[#6a5aa3] to-[#3a3456] text-white px-12 py-4 text-lg rounded-full font-semibold shadow-lg hover:scale-105 transition"
+            style={{ minWidth: 200 }}
+          >
+            <FiShield className="text-2xl" />
+            Manage Roles
+          </button>
+          <button
+            onClick={() => setActivePage('courses')}
+            className="flex items-center gap-2 bg-gradient-to-r from-[#57418d] to-[#7b2ff2] text-white px-12 py-4 text-lg rounded-full font-semibold shadow-lg hover:scale-105 transition"
+            style={{ minWidth: 200 }}
+          >
+            <FiBook className="text-2xl" />
+            Manage Courses
+          </button>
+          <button
+            onClick={() => setActivePage('exams')}
+            className="flex items-center gap-2 bg-gradient-to-r from-[#ff512f] to-[#dd2476] text-white px-12 py-4 text-lg rounded-full font-semibold shadow-lg hover:scale-105 transition"
+            style={{ minWidth: 200 }}
+          >
+            <FiEdit className="text-2xl" />
+            Schedule Exams
+          </button>
         </div>
       </div>
-      <h2 className="text-3xl font-extrabold mb-2 text-[#38365e] text-center drop-shadow mt-6">
-        Role Manager
-      </h2>
-      <p className="mb-8 text-[#57418d] text-center text-base font-medium">
-       Assign and update user roles efficiently.
-      </p>
-      <form
-        name="roleUpdateForm"
-        id="roleUpdateForm"
-        className="flex flex-col gap-8 w-full"
-        onSubmit={e => {
-          e.preventDefault();
-          handleRoleUpdate();
-        }}
-      >
-        <div className="flex flex-col gap-2 w-full">
-          <label className="text-[#57418d] font-semibold">Select User</label>
-          <select
-            name="selectUser"
-            id="selectUser"
-            value={roleEmail}
-            onChange={(e) => setRoleEmail(e.target.value)}
-            className="border-2 border-purple-200 focus:border-purple-400 px-4 py-3 rounded-xl w-full shadow-md transition bg-white"
-            required
-          >
-            <option value="">Select User</option>
-            <optgroup label="Teaching Assistants (TAs)">
-              {allUsers
-                .filter(user => user.role === 'ta')
-                .map(user => (
-                  <option key={user.email} value={user.email}>
-                    {user.name} ({user.email})
-                  </option>
-                ))}
-            </optgroup>
-            <optgroup label="Students">
-              {allUsers
-                .filter(user => user.role === 'student')
-                .map(user => (
-                  <option key={user.email} value={user.email}>
-                    {user.name} ({user.email})
-                  </option>
-                ))}
-            </optgroup>
-          </select>
-        </div>
-        <div className="flex flex-col gap-2 w-full">
-          <label className="text-[#57418d] font-semibold">Select Role</label>
-          <select
-            name="selectRole"
-            id="selectRole"
-            className="border-2 border-purple-200 focus:border-purple-400 px-4 py-3 rounded-xl w-full shadow-md transition bg-white"
-            value={roleType}
-            onChange={e => setRoleType(e.target.value)}
-          >
-            <option value="student">Student</option>
-            <option value="ta">Teaching Assistant (TA)</option>
-          </select>
-        </div>
-        <motion.button
-          type="submit"
-          className="mt-2 bg-gradient-to-r from-[#57418d] to-[#7b2ff2] hover:from-[#7b2ff2] hover:to-[#57418d] text-white px-8 py-3 rounded-full font-semibold shadow-xl hover:scale-105 transition text-lg tracking-wide"
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.97 }}
-          style={{ minWidth: 160 }}
-        >
-          Update Role
-        </motion.button>
-      </form>
-    </motion.div>
-  </motion.div>
     ),
-  courses: (
-  <div className="flex flex-col items-center justify-start w-full h-full pt-10 pb-4">
-    <h2 className="text-3xl font-extrabold mb-10 text-[#38365e] text-center drop-shadow">
-      Courses and Batches
-    </h2>
-    <div className="w-full max-w-5xl">
-      <table className="w-full border-separate border-spacing-y-4">
-        <thead>
-          <tr>
-            <th className="bg-[#57418d] text-white py-4 px-6 rounded-l-2xl text-lg font-semibold text-center tracking-wide">
-              Course Name
-            </th>
-            <th className="bg-[#57418d] text-white py-4 px-6 text-lg font-semibold text-center tracking-wide">
-              Batch Name
-            </th>
-            <th className="bg-[#57418d] text-white py-4 px-6 rounded-r-2xl text-lg font-semibold text-center tracking-wide">
-              Actions
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {courseBatchList.length > 0 ? (
-            courseBatchList.map((row, idx) => (
-              <tr key={idx} className="hover:bg-purple-50 transition">
-                <td className="px-6 py-4 text-center text-base font-medium">{row.courseName}</td>
-                <td className="px-6 py-4 text-center text-base font-medium">{row.batchName}</td>
-                <td className="px-6 py-4 text-center text-base flex gap-2 justify-center">
-                  {/* Enroll Student Button (with CSV) */}
-                  <button
-                    onClick={() => handleEnrollStudent(row.courseName, row.batchName)}
-                    className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-400 via-green-500 to-emerald-400 text-white font-semibold rounded-2xl shadow-md hover:from-green-500 hover:to-emerald-500 hover:scale-105 transition-all duration-150"
-                  >
-                    <FiUserPlus className="text-lg" /> Enroll Student
-                  </button>
-                  {/* Download CSV Button */}
-                  <button
-                    onClick={() => downloadCSV(row.courseName, row.batchName)}
-                    className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-400 via-blue-500 to-cyan-400 text-white font-semibold rounded-2xl shadow-md hover:from-blue-500 hover:to-cyan-500 hover:scale-105 transition-all duration-150"
-                  >
-                    <FiDownload className="text-lg" /> Download CSV
-                  </button>
-                </td>
-              </tr>
-            ))
-          ) : (
-            <tr>
-              <td colSpan={3} className="text-center text-gray-400 py-12 text-lg font-semibold">
-                No courses and batches added yet
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-    </div>
-  </div>
-),
-    exams: (
-      <div className="flex flex-col items-center justify-start w-full h-full pt-10 pb-4">
-        <h2 className="text-3xl font-bold mb-10 text-[#38365e] text-center">Exam Management</h2>
-        <div className="w-full flex flex-col gap-6 max-w-2xl mb-4">
-          <div className="flex flex-row gap-8">
-            <div className="flex flex-col flex-1">
-              <label className="text-[#38365e] font-semibold mb-1">Course</label>
+    roleManager: (
+      <motion.div
+        className="flex flex-col items-center justify-center w-full h-full pt-10 pb-4"
+        initial={{ opacity: 0, y: 30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, ease: "easeOut" }}
+      >
+        <motion.div
+          className="bg-gradient-to-br from-[#e0c3fc] via-[#8ec5fc] to-[#a9c9ff] shadow-2xl rounded-3xl border border-white/60 px-10 py-12 max-w-lg w-full flex flex-col items-center relative"
+          initial={{ scale: 0.97 }}
+          animate={{ scale: 1 }}
+          transition={{ duration: 0.6, ease: "easeOut" }}
+        >
+          <div className="absolute -top-10 left-1/2 -translate-x-1/2 flex justify-center">
+            <div className="bg-gradient-to-br from-[#57418d] to-[#7b2ff2] p-4 rounded-full shadow-lg">
+              <FiUserCheck className="text-white text-4xl" />
+            </div>
+          </div>
+          <h2 className="text-3xl font-extrabold mb-2 text-[#38365e] text-center drop-shadow mt-6">
+            Role Manager
+          </h2>
+          <p className="mb-8 text-[#57418d] text-center text-base font-medium">
+            Assign and update user roles efficiently.
+          </p>
+          <form
+            name="roleUpdateForm"
+            id="roleUpdateForm"
+            className="flex flex-col gap-8 w-full"
+            onSubmit={e => {
+              e.preventDefault();
+              handleRoleUpdate();
+            }}
+          >
+            <div className="flex flex-col gap-2 w-full">
+              <label className="text-[#57418d] font-semibold">Select User</label>
               <select
-                value={selectedCourse}
-                onChange={(e) => {
-                  setSelectedCourse(e.target.value);
-                  setSelectedBatch('');
-                }}
-                className="border-2 border-[#b3aedd] px-4 py-2 rounded-xl outline-none"
+                name="selectUser"
+                id="selectUser"
+                value={roleEmail}
+                onChange={(e) => setRoleEmail(e.target.value)}
+                className="border-2 border-purple-200 focus:border-purple-400 px-4 py-3 rounded-xl w-full shadow-md transition bg-white"
+                required
               >
-                <option value="">Select Course</option>
-                {courses
-                  .filter((c) => c && c.id)
-                  .map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                ))}
+                <option value="">Select User</option>
+                <optgroup label="Teaching Assistants (TAs)">
+                  {allUsers
+                    .filter(user => user.role === 'ta')
+                    .map(user => (
+                      <option key={user.email} value={user.email}>
+                        {user.name} ({user.email})
+                      </option>
+                    ))}
+                </optgroup>
+                <optgroup label="Students">
+                  {allUsers
+                    .filter(user => user.role === 'student')
+                    .map(user => (
+                      <option key={user.email} value={user.email}>
+                        {user.name} ({user.email})
+                      </option>
+                    ))}
+                </optgroup>
               </select>
             </div>
-            <div className="flex flex-col flex-1">
-              <label className="text-[#38365e] font-semibold mb-1">Batch</label>
+            <div className="flex flex-col gap-2 w-full">
+              <label className="text-[#57418d] font-semibold">Select Role</label>
               <select
-                value={selectedBatch}
-                onChange={(e) => setSelectedBatch(e.target.value)}
-                className="border-2 border-[#b3aedd] px-4 py-2 rounded-xl outline-none"
-                disabled={!selectedCourse}
+                name="selectRole"
+                id="selectRole"
+                className="border-2 border-purple-200 focus:border-purple-400 px-4 py-3 rounded-xl w-full shadow-md transition bg-white"
+                value={roleType}
+                onChange={e => setRoleType(e.target.value)}
               >
-                <option value="">{!selectedCourse ? 'No Batches Available' : 'Select Batch'}</option>
-                {batches
-                  .filter((b) => b && b.id)
-                  .map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name}
-                    </option>
-                ))}
+                <option value="student">Student</option>
+                <option value="ta">Teaching Assistant (TA)</option>
               </select>
             </div>
-          </div>
-
-          <div className="flex flex-row gap-8">
-            <div className="flex flex-col flex-1">
-              <label className="text-[#38365e] font-semibold mb-1">Exam Title</label>
-              <input
-                type="text"
-                value={examTitle}
-                onChange={(e) => setExamTitle(e.target.value)}
-                className="border-2 border-[#b3aedd] px-4 py-2 rounded-xl outline-none"
-                placeholder="Midterm, Quiz 1, etc."
-              />
-            </div>
-            <div className="flex flex-col flex-1">
-              <label className="text-[#38365e] font-semibold mb-1">Number of Questions</label>
-              <input
-                type="number"
-                value={numQuestions}
-                onChange={(e) => setNumQuestions(Number(e.target.value))}
-                className="border-2 border-[#b3aedd] px-4 py-2 rounded-xl outline-none"
-                placeholder="e.g. 10"
-              />
-            </div>
-          </div>
-
-          <div className="flex flex-row gap-8">
-            <div className="flex flex-col flex-1">
-              <label className="text-[#38365e] font-semibold mb-1">Start Time</label>
-              <input
-                type="datetime-local"
-                value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
-                className="border-2 border-[#b3aedd] px-4 py-2 rounded-xl outline-none"
-              />
-            </div>
-            <div className="flex flex-col flex-1">
-              <label className="text-[#38365e] font-semibold mb-1">End Time</label>
-              <input
-                type="datetime-local"
-                value={endTime}
-                onChange={(e) => setEndTime(e.target.value)}
-                className="border-2 border-[#b3aedd] px-4 py-2 rounded-xl outline-none"
-              />
-            </div>
-          </div>
-
-          <div className="flex flex-row gap-8">
-            <div className="flex flex-col flex-1">
-              <label className="text-[#38365e] font-semibold mb-1">No. of Peers (K)</label>
-              <input
-                type="number"
-                min="1"
-                value={k}
-                onChange={(e) => setK(Number(e.target.value))}
-                className="border-2 border-[#b3aedd] px-4 py-2 rounded-xl outline-none"
-                placeholder="e.g. 3"
-              />
-            </div>
-            <div className="flex flex-col flex-1">
-              <label className="text-[#38365e] font-semibold mb-1">Solutions</label>
-              <div className="flex items-center">
-                <label className="mr-2">
-                  <input
-                    type="file"
-                    onChange={(e) => setSolutions(e.target.files ? e.target.files[0] : null)}
-                    className="hidden"
-                    id="solution-file"
-                  />
-                  <span
-                    className="inline-block px-3 py-1 bg-[#232323] text-white rounded cursor-pointer"
-                    style={{ fontWeight: 500 }}
-                    onClick={() => document.getElementById('solution-file')?.click()}
-                  >
-                    Choose File
-                  </span>
-                </label>
-                <span className="ml-2 text-sm text-gray-700">
-                  {solutions ? solutions.name : "No file chosen"}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex justify-end mt-2">
-            <button
-              onClick={handleExamSchedule}
-              disabled={
-                !selectedCourse || !selectedBatch || !examTitle || !startTime || !endTime || numQuestions <= 0 || k <= 0
-              }
-              className={`px-6 py-2 rounded-2xl font-semibold shadow transition text-white text-base ${
-                selectedCourse && selectedBatch && examTitle && startTime && endTime && numQuestions > 0 && k > 0
-                  ? 'bg-[#57418d] hover:bg-[#402b6c]'
-                  : 'bg-gray-400 cursor-not-allowed'
-              }`}
+            <motion.button
+              type="submit"
+              className="mt-2 bg-gradient-to-r from-[#57418d] to-[#7b2ff2] hover:from-[#7b2ff2] hover:to-[#57418d] text-white px-8 py-3 rounded-full font-semibold shadow-xl hover:scale-105 transition text-lg tracking-wide"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.97 }}
+              style={{ minWidth: 160 }}
             >
-              Schedule Exam
-            </button>
-          </div>
-        </div>
-
-        <div className="w-full max-w-5xl mt-10">
+              Update Role
+            </motion.button>
+          </form>
+        </motion.div>
+      </motion.div>
+    ),
+    courses: (
+      <div className="flex flex-col items-center justify-start w-full h-full pt-10 pb-4">
+        <h2 className="text-3xl font-extrabold mb-10 text-[#38365e] text-center drop-shadow">
+          Courses and Batches
+        </h2>
+        <div className="w-full max-w-5xl">
           <table className="w-full border-separate border-spacing-y-4">
             <thead>
               <tr>
-                <th className="bg-[#57418d] text-white py-3 px-6 rounded-l-2xl text-lg font-semibold text-center">
-                  Title
+                <th className="bg-[#57418d] text-white py-4 px-6 rounded-l-2xl text-lg font-semibold text-center tracking-wide">
+                  Course Name
                 </th>
-                <th className="bg-[#57418d] text-white py-3 px-6 text-lg font-semibold text-center">
-                  Course
+                <th className="bg-[#57418d] text-white py-4 px-6 text-lg font-semibold text-center tracking-wide">
+                  Batch Name
                 </th>
-                <th className="bg-[#57418d] text-white py-3 px-6 text-lg font-semibold text-center">
-                  Batch
-                </th>
-                <th className="bg-[#57418d] text-white py-3 px-6 text-lg font-semibold text-center">
-                  Duration
-                </th>
-                <th className="bg-[#57418d] text-white py-3 px-6 text-lg font-semibold text-center">
-                  Total Marks
-                </th>
-                <th className="bg-[#57418d] text-white py-3 px-6 text-lg font-semibold text-center">
-                  K
-                </th>
-                <th className="bg-[#57418d] text-white py-3 px-6 text-lg font-semibold text-center">
-                  Total Students
-                </th>
-                <th className="bg-[#57418d] text-white py-3 px-6 text-lg font-semibold text-center">
-                  Solutions
-                </th>
-                <th className="bg-[#57418d] text-white py-3 px-6 rounded-r-2xl text-lg font-semibold text-center">
+                <th className="bg-[#57418d] text-white py-4 px-6 rounded-r-2xl text-lg font-semibold text-center tracking-wide">
                   Actions
                 </th>
               </tr>
             </thead>
             <tbody>
-              {examRecords.length > 0 ? (
-                examRecords.map((ex, i) => (
-                  <tr key={i}>
-                    <td className="px-6 py-4 text-center text-base">{ex.title}</td>
-                    <td className="px-6 py-4 text-center text-base">{ex.course}</td>
-                    <td className="px-6 py-4 text-center text-base">{ex.batch}</td>
-                    <td className="px-6 py-4 text-center text-base">{calculateDuration(ex.startTime, ex.endTime)}</td>
-                    <td className="px-6 py-4 text-center text-base">{ex.numQuestions * 10}</td>
-                    <td className="px-6 py-4 text-center text-base">{ex.k || '-'}</td>
-                    <td className="px-6 py-4 text-center text-base">{ex.totalStudents || '-'}</td>
-                    <td className="px-6 py-4 text-center text-base">
-                      <button className="text-blue-600 hover:text-blue-800">
-                        View Solutions
-                      </button>
-                    </td>
+              {courseBatchList.length > 0 ? (
+                courseBatchList.map((row, idx) => (
+                  <tr key={idx} className="hover:bg-purple-50 transition">
+                    <td className="px-6 py-4 text-center text-base font-medium">{row.courseName}</td>
+                    <td className="px-6 py-4 text-center text-base font-medium">{row.batchName}</td>
                     <td className="px-6 py-4 text-center text-base flex gap-2 justify-center">
-                      <button className="text-blue-600 hover:text-blue-800">
-                        View
+                      <button
+                        onClick={() => handleEnrollStudent(row.courseName, row.batchName)}
+                        className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-400 via-green-500 to-emerald-400 text-white font-semibold rounded-2xl shadow-md hover:from-green-500 hover:to-emerald-500 hover:scale-105 transition-all duration-150"
+                      >
+                        <FiUserPlus className="text-lg" /> Enroll Student
                       </button>
-                      <button className="text-green-600 hover:text-green-800">
-                        Solutions
+                      <button
+                        onClick={() => downloadCSV(row.courseName, row.batchName)}
+                        className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-400 via-blue-500 to-cyan-400 text-white font-semibold rounded-2xl shadow-md hover:from-blue-500 hover:to-cyan-500 hover:scale-105 transition-all duration-150"
+                      >
+                        <FiDownload className="text-lg" /> Download CSV
                       </button>
                     </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={9} className="text-center text-gray-500 py-4">
-                    No exams scheduled yet
+                  <td colSpan={3} className="text-center text-gray-400 py-12 text-lg font-semibold">
+                    No courses and batches added yet
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
+      </div>
+    ),
+    exams: (
+      <div className="flex flex-col items-center w-full h-full pt-10 pb-4">
+        <h2 className="text-3xl font-bold mb-8 text-[#38365e] text-center">Exam Management</h2>
+        <div className="flex flex-wrap gap-8 items-center mb-8 justify-center">
+          <label className="font-semibold text-[#38365e]">Course</label>
+          <select
+            value={selectedCourse}
+            onChange={e => { setSelectedCourse(e.target.value); setSelectedBatch(''); }}
+            className="border rounded px-4 py-2 min-w-[180px]"
+          >
+            <option value="">Select Course</option>
+            {courses.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+          <label className="font-semibold text-[#38365e]">Batch</label>
+          <select
+            value={selectedBatch}
+            onChange={e => setSelectedBatch(e.target.value)}
+            className="border rounded px-4 py-2 min-w-[120px]"
+            disabled={!selectedCourse}
+          >
+            <option value="">Select Batch</option>
+            {batches.filter(b => b && b.id).map(b => (
+              <option key={b.id} value={b.id}>{b.name}</option>
+            ))}
+          </select>
+          <button
+            className={`ml-4 px-8 py-2 rounded-2xl font-semibold text-white text-lg shadow ${selectedCourse && selectedBatch ? "bg-[#57418d] hover:bg-[#402b6c]" : "bg-gray-400 cursor-not-allowed"}`}
+            disabled={!selectedCourse || !selectedBatch}
+            onClick={() => setShowExamModal(true)}
+          >
+            Schedule Exam
+          </button>
+        </div>
+        <div className="w-full max-w-5xl">
+          <table className="w-full border-separate border-spacing-y-2">
+            <thead>
+              <tr>
+                <th className="bg-[#57418d] text-white py-3 px-3 rounded-l-2xl text-base">Exam Name</th>
+                <th className="bg-[#57418d] text-white py-3 px-3 text-base">Batch</th>
+                <th className="bg-[#57418d] text-white py-3 px-3 text-base">Date</th>
+                <th className="bg-[#57418d] text-white py-3 px-3 text-base">Time</th>
+                <th className="bg-[#57418d] text-white py-3 px-3 text-base">No. of Questions</th>
+                <th className="bg-[#57418d] text-white py-3 px-3 text-base">Duration</th>
+                <th className="bg-[#57418d] text-white py-3 px-3 text-base">Total Marks</th>
+                <th className="bg-[#57418d] text-white py-3 px-3 text-base">K</th>
+                <th className="bg-[#57418d] text-white py-3 px-3 text-base">Total Students</th>
+                <th className="bg-[#57418d] text-white py-3 px-3 text-base">Solutions</th>
+                <th className="bg-[#57418d] text-white py-3 px-3 rounded-r-2xl text-base">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {examRecords.length > 0 ? examRecords.map((ex, i) => {
+                const dateObj = new Date(ex.startTime);
+                const date = dateObj.toLocaleDateString('en-GB');
+                const time = dateObj.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+                return (
+                  <tr key={i} className="hover:bg-purple-50 transition">
+                    <td className="px-3 py-2 text-center">{ex.title}</td>
+                    <td className="px-3 py-2 text-center">{ex.batch}</td>
+                    <td className="px-3 py-2 text-center">{date}</td>
+                    <td className="px-3 py-2 text-center">{time}</td>
+                    <td className="px-3 py-2 text-center">{ex.numQuestions}</td>
+                    <td className="px-3 py-2 text-center">{ex.duration || '-'}</td>
+                    <td className="px-3 py-2 text-center">{ex.totalMarks}</td>
+                    <td className="px-3 py-2 text-center">{ex.k}</td>
+                    <td className="px-3 py-2 text-center">{ex.totalStudents}</td>
+                    <td className="px-3 py-2 text-center">
+                      <button
+                        className="text-blue-700 underline hover:text-blue-900"
+                        onClick={() => { setSolutionModalFile(ex.solutions || "No file chosen"); setShowSolutionModal(true); }}
+                      >
+                        View Solutions
+                      </button>
+                    </td>
+                    <td className="px-3 py-2 flex gap-4 justify-center">
+                      <button
+                        title="Send for Evaluation"
+                        className="text-purple-600 hover:text-purple-800 text-2xl"
+                        onClick={() => { setShowSendDialog(true); setTimeout(() => setShowSendDialog(false), 1200); }}
+                      >
+                        <FiSend />
+                      </button>
+                      <button title="Edit" className="text-green-600 hover:text-green-800 text-2xl">
+                        <FiEdit />
+                      </button>
+                      <button title="Download" className="text-blue-700 hover:text-blue-900 text-2xl">
+                        <FiDownload />
+                      </button>
+                      <button title="Delete" className="text-red-600 hover:text-red-800 text-2xl">
+                        <FiTrash2 />
+                      </button>
+                    </td>
+                  </tr>
+                )
+              }) : (
+                <tr>
+                  <td colSpan={11} className="text-center text-gray-400 py-8">No exams scheduled yet</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        {showExamModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+            <form
+              className="bg-white rounded-2xl shadow-xl px-8 py-8 flex flex-col gap-4 w-[400px] max-w-full"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!examTitle || !selectedCourse || !selectedBatch || !startTime || !endTime || !numQuestions || !k) {
+                  alert("Please fill all fields.");
+                  return;
+                }
+                await handleExamSchedule();
+                setShowExamModal(false);
+              }}
+            >
+              <h2 className="text-xl font-bold mb-2">Schedule Exam</h2>
+              <div>
+                <label className="font-semibold">Name:</label>
+                <input type="text" className="border rounded px-3 py-2 w-full mt-1"
+                  value={examTitle} onChange={e => setExamTitle(e.target.value)}
+                  placeholder="Exam Name" required
+                />
+              </div>
+              <div>
+                <label className="font-semibold">Course:</label>
+                <select className="border rounded px-3 py-2 w-full mt-1" value={selectedCourse} disabled>
+                  <option>{courses.find(c => c.id === selectedCourse)?.name || ""}</option>
+                </select>
+              </div>
+              <div>
+                <label className="font-semibold">Batch:</label>
+                <select className="border rounded px-3 py-2 w-full mt-1" value={selectedBatch} disabled>
+                  <option>{batches.find(b => b.id === selectedBatch)?.name || ""}</option>
+                </select>
+              </div>
+              <div>
+                <label className="font-semibold">Start Time:</label>
+                <input type="datetime-local" className="border rounded px-3 py-2 w-full mt-1"
+                  value={startTime} onChange={e => setStartTime(e.target.value)} required
+                />
+              </div>
+              <div>
+                <label className="font-semibold">End Time:</label>
+                <input type="datetime-local" className="border rounded px-3 py-2 w-full mt-1"
+                  value={endTime} onChange={e => setEndTime(e.target.value)} required
+                />
+              </div>
+              <div>
+                <label className="font-semibold">Number of Questions:</label>
+                <input type="number" className="border rounded px-3 py-2 w-full mt-1"
+                  value={numQuestions} onChange={e => setNumQuestions(Number(e.target.value))} min={1} required
+                />
+              </div>
+              <div>
+                <label className="font-semibold">No. of Peers (K):</label>
+                <input type="number" className="border rounded px-3 py-2 w-full mt-1"
+                  value={k} onChange={e => setK(Number(e.target.value))} min={1} required
+                />
+              </div>
+              <div>
+                <label className="font-semibold">Solutions:</label>
+                <div className="flex items-center gap-4 mt-1">
+                  <input
+                    type="file"
+                    id="solutions-upload"
+                    className="hidden"
+                    onChange={e => setSolutions(e.target.files?.[0] || null)}
+                  />
+                  <label
+                    htmlFor="solutions-upload"
+                    className="inline-block px-4 py-2 bg-black text-white rounded cursor-pointer font-semibold"
+                    style={{ fontWeight: 500 }}
+                  >
+                    Choose File
+                  </label>
+                  <span className="ml-2 text-sm text-gray-700">
+                    {solutions ? solutions.name : "No file chosen"}
+                  </span>
+                </div>
+              </div>
+              <div className="flex gap-4 mt-4">
+                <button
+                  type="submit"
+                  className="bg-[#57418d] hover:bg-[#402b6c] text-white rounded-xl px-8 py-2 font-semibold"
+                >
+                  Submit
+                </button>
+                <button
+                  type="button"
+                  className="bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-xl px-8 py-2 font-semibold"
+                  onClick={() => setShowExamModal(false)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+        {showSolutionModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+            <div className="bg-white rounded-2xl shadow-xl px-12 py-8 flex flex-col items-center min-w-[320px] max-w-full">
+              <h2 className="text-xl font-bold mb-4">Uploaded Solution</h2>
+              <div className="mb-6">
+                <span className="text-lg text-gray-900">
+                  {solutionModalFile}
+                </span>
+              </div>
+              <button
+                className="bg-[#57418d] text-white px-8 py-2 rounded-2xl font-semibold shadow hover:bg-[#402b6c]"
+                onClick={() => setShowSolutionModal(false)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        )}
+        {showSendDialog && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+            <div className="bg-white rounded-2xl shadow-xl px-8 py-8 flex flex-col items-center min-w-[320px]">
+              <svg width={56} height={56} fill="none" viewBox="0 0 56 56">
+                <circle cx="28" cy="28" r="28" fill="#6ddf99" />
+                <path d="M18 30l7 7 13-13" stroke="#fff" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <div className="text-lg text-[#235d3a] font-semibold text-center mb-1 mt-2">
+                Solutions sent to students for evaluation!
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     ),
   };
@@ -795,10 +813,11 @@ const TeacherDashboard = ({ onLogout }: { onLogout?: () => void }) => {
         background: "linear-gradient(135deg, rgb(168, 184, 208) 0%, rgb(183, 64, 173) 100%)"
       }}
     >
-<div className={`${showSidebar ? 'w-64' : 'w-20'} bg-gradient-to-b from-[#2b2e4a] via-[#5636b8] to-[#231942] text-white flex flex-col justify-between py-6 px-4 rounded-r-3xl shadow-2xl transition-all duration-300`}>
+      <div className={`${showSidebar ? 'w-64' : 'w-20'} bg-gradient-to-b from-[#2b2e4a] via-[#5636b8] to-[#231942] text-white flex flex-col justify-between py-6 px-4 rounded-r-3xl shadow-2xl transition-all duration-300`}>
         <button
           onClick={() => setShowSidebar(!showSidebar)}
-          className="self-start mb-6 p-2 border-2 border-transparent hover:border-blue-300 rounded-full active:scale-95 transition"
+          className="self-start mb-6 p-2 border-2 border-transparent rounded-full active:scale-95 transition
+            hover:bg-white/10 hover:border-blue-300 hover:shadow-lg"
         >
           <FiMenu className="text-2xl" />
         </button>
@@ -812,17 +831,17 @@ const TeacherDashboard = ({ onLogout }: { onLogout?: () => void }) => {
               const Icon = icons[key];
               return (
                 <li
-  key={key}
-  onClick={() => setActivePage(key)}
-  className={`cursor-pointer 
-    ${activePage === key
-      ? 'bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 text-white font-bold shadow-lg scale-105'
-      : 'hover:bg-white/10 hover:scale-105'}
-    flex items-center px-4 py-2 rounded-xl transition-all duration-200`}
->
-  <Icon className={`transition-all ${showSidebar ? 'mr-2 text-xl' : 'text-3xl'} ${!showSidebar ? 'text-3xl md:text-4xl' : ''}`} />
-  {showSidebar && (key === 'roleManager' ? 'Manage Roles' : key.charAt(0).toUpperCase() + key.slice(1))}
-</li>
+                  key={key}
+                  onClick={() => setActivePage(key)}
+                  className={`cursor-pointer 
+                    ${activePage === key
+                      ? 'bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 text-white font-bold shadow-lg scale-105'
+                      : 'hover:bg-white/10 hover:scale-105'}
+                    flex items-center px-4 py-2 rounded-xl transition-all duration-200`}
+                >
+                  <Icon className={`transition-all ${showSidebar ? 'mr-2 text-xl' : 'text-3xl'} ${!showSidebar ? 'text-3xl md:text-4xl' : ''}`} />
+                  {showSidebar && (key === 'roleManager' ? 'Manage Roles' : key.charAt(0).toUpperCase() + key.slice(1))}
+                </li>
               );
             })}
           </ul>
@@ -830,52 +849,42 @@ const TeacherDashboard = ({ onLogout }: { onLogout?: () => void }) => {
         <button
           onClick={() => setLogoutDialog(true)}
           className="flex items-center justify-center gap-2 hover:bg-white/10 hover:text-red-400 px-4 py-2 rounded transition-all duration-200">
-        
           <FiLogOut className={`${showSidebar ? 'mr-2 text-xl' : 'text-3xl'} ${!showSidebar ? 'text-3xl md:text-4xl' : ''}`} />
           {showSidebar && 'Logout'}
         </button>
       </div>
-
       <div className="flex-1 relative overflow-y-auto flex justify-center items-start">
         <div className="absolute top-4 right-6 z-20">
           <button onClick={() => setShowProfilePopup(!showProfilePopup)}
-            className="p-2 flex items-center justify-center rounded-full border-2 border-transparent hover:border-blue-300 transition active:scale-95 bg-white shadow"
+            className="p-2 flex items-center justify-center rounded-full border-2 border-transparent bg-white shadow
+            hover:bg-blue-100 hover:border-blue-300 hover:shadow-xl active:scale-95 transition"
+            title="Profile"
             style={{ boxShadow: '0 2px 14px 0 rgba(87,65,141,0.16)' }}
           >
             <ProfileSVG />
           </button>
           {showProfilePopup && (
-              <div
-                className="absolute right-0 mt-3 w-80 bg-white p-4 rounded-b-3xl shadow-lg z-10"
-                style={{
-                  borderTopLeftRadius: 0,
-                  borderTopRightRadius: 0,
-                  borderBottomLeftRadius: 24,
-                  borderBottomRightRadius: 24,
-                  boxShadow: '0 2px 14px 0 rgba(87,65,141,0.16)'
-                }}
-              >
-                <h2 className="text-xl font-bold mb-4">Profile Info</h2>
-                <div className="space-y-2 mb-4">
-                  <p><strong>Name:</strong> {profileData.name}</p>
-                  <p><strong>Email:</strong> {profileData.email}</p>
-                  <p><strong>Role:</strong> {profileData.role}</p>
-                </div>
-                <button
-                  onClick={() => {
-                    setShowProfilePopup(false);
-                  }}
-                  className="bg-purple-700 text-white px-4 py-2 rounded-3xl w-full"
-                >
-                  OK
-                </button>
+            <div
+              className="absolute right-0 mt-3 w-80 bg-white p-4 rounded-b-3xl shadow-lg z-10"
+              style={{
+                borderTopLeftRadius: 0,
+                borderTopRightRadius: 0,
+                borderBottomLeftRadius: 24,
+                borderBottomRightRadius: 24,
+                boxShadow: '0 2px 14px 0 rgba(87,65,141,0.16)'
+              }}
+            >
+              <h2 className="text-xl font-bold mb-4">Profile Info</h2>
+              <div className="space-y-2 mb-4">
+                <p><strong>Name:</strong> {profileData.name}</p>
+                <p><strong>Email:</strong> {profileData.email}</p>
+                <p><strong>Role:</strong> {profileData.role}</p>
               </div>
-            )}
+            </div>
+          )}
         </div>
-
         <div
-         className="bg-white/90 rounded-3xl shadow-2xl w-full max-w-6xl h-auto mt-20 mb-10 mx-6 px-8 py-6 flex flex-col items-start justify-start overflow-auto backdrop-blur-sm"
-
+          className="bg-white/90 rounded-3xl shadow-2xl w-full max-w-6xl h-auto mt-20 mb-10 mx-6 px-8 py-6 flex flex-col items-start justify-start overflow-auto backdrop-blur-sm"
           style={{
             minHeight: "calc(100vh - 120px)",
             boxShadow: '0 2px 24px 0 rgba(87,65,141,0.10)'
@@ -885,123 +894,116 @@ const TeacherDashboard = ({ onLogout }: { onLogout?: () => void }) => {
             {pages[activePage]}
           </div>
         </div>
-
-        <DialogBox show={showProfileMsg} message="Profile Saved Successfully!" />
         <DialogBox show={showExamMsg} message="Exam Scheduled Successfully!" />
         <DialogBox show={showRoleMsg} message="Role Updated Successfully!" />
-
-   {showEnrollModal && (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-    <form
-      onSubmit={handleEnrollSubmit}
-      className="bg-white rounded-2xl shadow-xl px-8 py-8 flex flex-col items-center w-[350px] max-w-full"
-    >
-      <h2 className="text-2xl font-bold mb-6 text-center">Enroll Student</h2>
-      <div className="flex flex-col gap-3 w-full">
-        <div>
-          <label className="font-semibold">Course:</label>
-          <input
-            value={enrollCourse}
-            disabled
-            className="border px-3 py-2 rounded w-full mt-1 bg-gray-100"
-          />
-        </div>
-        <div>
-          <label className="font-semibold">Batch:</label>
-          <input
-            value={enrollBatch}
-            disabled
-            className="border px-3 py-2 rounded w-full mt-1 bg-gray-100"
-          />
-        </div>
-        {/* --- CSV Upload Block (UI only, no backend) --- */}
-        <div className="flex flex-col items-center w-full my-2">
-          <label className="font-semibold mb-2 text-center w-full">Bulk Enroll via CSV</label>
-          <input
-            type="file"
-            accept=".csv"
-            className="hidden"
-            id="csv-upload"
-            onChange={async (e) => {
-              const file = e.target.files?.[0];
-              if (!file) return;
-              if (!file.name.endsWith('.csv')) {
-                setEnrollError('Please upload a valid CSV file.');
-                return;
-              }
-              setCsvFileName(file.name);
-
-              // CSV Parse Logic
-              const text = await file.text();
-              const rows = text.split("\n").map(r => r.trim()).filter(Boolean);
-              let dataRows = rows;
-              if (rows[0].toLowerCase().includes('name') && rows[0].toLowerCase().includes('email')) {
-                dataRows = rows.slice(1);
-              }
-              const students = dataRows.map((row) => {
-                const [name, email] = row.split(",");
-                return { name: name?.trim(), email: email?.trim() };
-              }).filter(s => s.name && s.email);
-
-              // Add students to enrolledStudents state (frontend only)
-              const key = `${enrollCourse}_${enrollBatch}`;
-              setEnrolledStudents(prev => ({
-                ...prev,
-                [key]: [...(prev[key] || []), ...students]
-              }));
-            }}
-          />
-          <label
-            htmlFor="csv-upload"
-            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-green-400 via-green-500 to-emerald-400 text-white font-semibold rounded-2xl shadow hover:from-green-500 hover:to-emerald-500 hover:scale-105 transition-all cursor-pointer"
-            style={{ minWidth: 0 }}
-          >
-            <FiDownload className="text-lg" /> Choose CSV File
-          </label>
-          <span className="text-xs text-gray-500 mt-1">{csvFileName ? csvFileName : "No file chosen"}</span>
-          <span className="text-xs text-gray-500 mt-1">Upload a CSV file with columns: Name, Email</span>
-            {enrollError && (
-    <div className="mt-2 text-red-600 font-semibold text-center w-full">{enrollError}</div>
-  )}
-        </div>
-      </div>
-      <div className="flex gap-4 mt-6">
-        <button
-          type="submit"
-          className="bg-[#57418d] text-white px-8 py-2 rounded-2xl font-semibold shadow transition hover:bg-[#402b6c]"
-        >
-          Enroll
-        </button>
-        <button
-          type="button"
-          onClick={() => setShowEnrollModal(false)}
-          className="bg-gray-200 text-gray-700 rounded-2xl px-8 py-2 font-semibold hover:bg-gray-300 transition"
-        >
-          Cancel
-        </button>
-      </div>
-      {enrollSuccess && (
-        <div className="mt-4 text-green-600 font-semibold text-center">
-          Student enrolled successfully!a
-        </div>
-      )}
-      <div className="mt-4 w-full">
-        <div className="font-semibold mb-1">Enrolled Students:</div>
-      <ul className="max-h-24 overflow-y-auto text-sm">
-  {(enrolledStudents[`${enrollCourse}_${enrollBatch}`] || []).length === 0 ? (
-    <li className="text-gray-400">No students enrolled yet.</li>
-  ) : (
-    (enrolledStudents[`${enrollCourse}_${enrollBatch}`] || []).map((s, i) => (
-      <li key={i} className="mb-1">
-        {s.name} ({s.email})
-      </li>
-    ))
-  )}
-</ul>
-      </div>
-    </form>
-  </div>
-)}
+        {showEnrollModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 animate-fade-in">
+            <form
+              onSubmit={handleEnrollSubmit}
+              className="bg-white rounded-2xl shadow-xl px-8 py-8 flex flex-col items-center w-[350px] max-w-full"
+            >
+              <h2 className="text-2xl font-bold mb-6 text-center">Enroll Student</h2>
+              <div className="flex flex-col gap-3 w-full">
+                <div>
+                  <label className="font-semibold">Course:</label>
+                  <input
+                    value={enrollCourse}
+                    disabled
+                    className="border px-3 py-2 rounded w-full mt-1 bg-gray-100"
+                  />
+                </div>
+                <div>
+                  <label className="font-semibold">Batch:</label>
+                  <input
+                    value={enrollBatch}
+                    disabled
+                    className="border px-3 py-2 rounded w-full mt-1 bg-gray-100"
+                  />
+                </div>
+                <div className="flex flex-col items-center w-full my-2">
+                  <label className="font-semibold mb-2 text-center w-full">Bulk Enroll via CSV</label>
+                  <input
+                    type="file"
+                    accept=".csv"
+                    className="hidden"
+                    id="csv-upload"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      if (!file.name.endsWith('.csv')) {
+                        setEnrollError('Please upload a valid CSV file.');
+                        setCsvStudents([]);
+                        return;
+                      }
+                      setCsvFileName(file.name);
+                      const text = await file.text();
+                      const rows = text.split("\n").map(r => r.trim()).filter(Boolean);
+                      let dataRows = rows;
+                      if (rows[0].toLowerCase().includes('name') && rows[0].toLowerCase().includes('email')) {
+                        dataRows = rows.slice(1);
+                      }
+                      const unique: Record<string, boolean> = {};
+                      const students: { name: string, email: string }[] = [];
+                      for (const row of dataRows) {
+                        const [name, email] = row.split(",").map(s => s?.trim());
+                        if (name && email) {
+                          const key = (name + email).toLowerCase();
+                          if (!unique[key]) {
+                            unique[key] = true;
+                            students.push({ name, email });
+                          }
+                        }
+                      }
+                      setCsvStudents(students);
+                      setEnrollError('');
+                    }}
+                  />
+                  <label
+                    htmlFor="csv-upload"
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-green-400 via-green-500 to-emerald-400 text-white font-semibold rounded-2xl shadow hover:from-green-500 hover:to-emerald-500 hover:scale-105 transition-all cursor-pointer"
+                    style={{ minWidth: 0 }}
+                  >
+                    <FiDownload className="text-lg" /> Choose CSV File
+                  </label>
+                  <span className="text-xs text-gray-500 mt-1">{csvFileName ? csvFileName : "No file chosen"}</span>
+                  <span className="text-xs text-gray-500 mt-1">Upload a CSV file with columns: Name, Email</span>
+                  {enrollError && (
+                    <div className="mt-2 text-red-600 font-semibold text-center w-full">{enrollError}</div>
+                  )}
+                </div>
+              </div>
+              <div className="flex gap-4 mt-6">
+                <button
+                  type="submit"
+                  className={`bg-gradient-to-r from-[#141e30] via-[#243b55] to-[#283e51] text-white px-8 py-2 rounded-2xl font-semibold shadow transition-all duration-200
+                    hover:scale-105 hover:from-[#283e51] hover:to-[#141e30] active:scale-95
+                    ${csvStudents.length === 0 ? 'opacity-60 cursor-not-allowed' : ''}`}
+                  disabled={csvStudents.length === 0}
+                >
+                  Enroll
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEnrollModal(false);
+                    setCsvFileName('');
+                    setEnrollError('');
+                    setCsvStudents([]);
+                  }}
+                  className="bg-gradient-to-r from-[#474b4f] via-[#232526] to-[#232526] text-white rounded-2xl px-8 py-2 font-semibold shadow transition-all duration-200
+                    hover:scale-105 hover:from-[#232526] hover:to-[#474b4f] active:scale-95"
+                >
+                  Cancel
+                </button>
+              </div>
+              {enrollSuccess && (
+                <div className="mt-4 text-green-600 font-semibold text-center">
+                  Student enrolled successfully!
+                </div>
+              )}
+            </form>
+          </div>
+        )}
         <DialogBox show={logoutDialog} message="Are you sure you want to logout?">
           <div className="flex gap-8 mt-4">
             <button
@@ -1026,17 +1028,17 @@ const TeacherDashboard = ({ onLogout }: { onLogout?: () => void }) => {
           </div>
         </DialogBox>
       </div>
-
       <div className="absolute bottom-6 right-6 z-20">
         <button
           onClick={() => setShowSettings(!showSettings)}
-          className="h-12 w-12 bg-gray-800 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-gray-700"
+          className="h-12 w-12 bg-gray-800 text-white rounded-full shadow-lg flex items-center justify-center
+            hover:bg-gray-700 hover:shadow-xl active:scale-95 transition"
+          title="Settings"
         >
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" className="w-6 h-6">
             <path strokeLinecap="round" strokeLinejoin="round" d="M10.343 3.94c.09-.542.56-.94 1.11-.94h1.093c.55 0 1.02.398 1.11.94l.149.894c.07.424.384.764.78.93.398.164.855.142 1.205-.108l.737-.527a1.125 1.125 0 011.45.12l.773.774c.39.389.44 1.002.12 1.45l-.527.737c-.25.35-.272.806-.107 1.204.165.397.505.71.93.78l.893.15c.543.09.94.56.94 1.109v1.094c0 .55-.397 1.02-.94 1.11l-.893.149c-.425.07-.765.383-.93.78-.165.398-.143.854.107 1.204l.527.738c.32.447.269 1.06-.12 1.45l-.774.773a1.125 1.125 0 01-1.449.12l-.738-.527c-.35-.25-.806-.272-1.203-.107-.397.165-.71.505-.781.929l-.149.894c-.09.542-.56.94-1.11.94h-1.094c-.55 0-1.019-.398-1.11-.94l-.148-.894c-.071-.424-.384-.764-.781-.93-.397-.164-.853-.142-1.203.108l-.738.527c-.447.32-1.06.269-1.45-.12l-.773-.774a1.125 1.125 0 01-.12-1.45l.527-.737c.25-.35.273-.806.108-1.204-.165-.397-.505-.71-.93-.78l-.894-.15c-.542-.09-.94-.56-.94-1.109v-1.094c0-.55.398-1.02.94-1.11l.894-.149c.424-.07.765-.383.93-.78.165-.398.142-.854-.108-1.204l-.527-.738a1.125 1.125 0 01.12-1.45l.773-.773a1.125 1.125 0 011.45-.12l.737.527c.35.25.806.272 1.203.107.397-.165.71-.505.781-.929l.149-.894zM15 12a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
         </button>
-
         {showSettings && (
           <div className="mt-2 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl shadow-xl p-4 text-sm space-y-4 w-60">
             <div className="flex items-center justify-between gap-6">
