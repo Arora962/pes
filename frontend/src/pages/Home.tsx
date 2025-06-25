@@ -1,4 +1,4 @@
-import { useState ,useEffect} from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 
 export default function Home() {
@@ -28,27 +28,13 @@ export default function Home() {
   };
 
   return (
-    <div className={`relative min-h-screen flex items-center justify-center overflow-hidden transition-colors duration-500 ${darkMode ? 'dark bg-gray-900' : 'bg-gradient-to-r from-purple-100 to-indigo-200'}`}>
-      {/* Animated Blobs */}
-      <div className="absolute w-72 h-72 bg-purple-300 opacity-30 rounded-full mix-blend-multiply filter blur-2xl animate-[blob_7s_infinite] -top-20 -left-20 dark:bg-purple-800"></div>
-      <div className="absolute w-72 h-72 bg-pink-300 opacity-30 rounded-full mix-blend-multiply filter blur-2xl animate-[blob_7s_infinite_2s] -bottom-20 -right-10 dark:bg-pink-800"></div>
-      <div className="absolute w-72 h-72 bg-yellow-300 opacity-30 rounded-full mix-blend-multiply filter blur-2xl animate-[blob_7s_infinite_4s] -top-10 -right-40 dark:bg-yellow-800"></div>
-
-      {/* Floating Soap Bubbles */}
-      <div className="absolute inset-0 z-0 overflow-hidden">
-        <div className="bubble one"></div>
-        <div className="bubble two"></div>
-        <div className="bubble three"></div>
-      </div>
-
+    <div className={`relative min-h-screen flex items-center justify-center overflow-hidden transition-colors duration-500 ${darkMode ? 'dark bg-slate-900' : 'bg-gradient-to-br from-teal-100 to-blue-200'}`}>
+      {/* Animated Background Blobs */}
+      <div className="absolute w-80 h-80 bg-teal-300 opacity-30 rounded-full mix-blend-multiply filter blur-2xl animate-[blob_7s_infinite] -top-20 -left-20 dark:bg-teal-800"></div>
+      <div className="absolute w-80 h-80 bg-blue-300 opacity-30 rounded-full mix-blend-multiply filter blur-2xl animate-[blob_7s_infinite_2s] -bottom-20 -right-10 dark:bg-blue-800"></div>
       {/* Main Card */}
-      <div className="relative z-10 bg-yellow-200 dark:bg-gray-800 bg-opacity-70 dark:bg-opacity-70 shadow-2xl rounded-3xl p-10 w-full max-w-3xl text-center backdrop-blur-md transition duration-300 ease-in-out">
-        <div className="mb-6">
-          <div className="mx-auto h-16 w-16 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center shadow-lg">
-            <span className="text-white text-3xl">👤</span>
-          </div>
-        </div>
-        <h1 className="text-3xl font-extrabold text-gray-800 dark:text-white mb-2">Peer Evaluation System</h1>
+      <div className="relative z-10 bg-white/70 dark:bg-gray-900/70 shadow-2xl rounded-2xl p-10 w-full max-w-xl text-center backdrop-blur-lg">
+        <h1 className="text-3xl font-bold text-gray-800 dark:text-white mb-2">Peer Evaluation System</h1>
         <p className="text-gray-600 dark:text-gray-300 mb-6">Welcome! Please login or register to continue.</p>
 
         <div className="grid grid-cols-3 gap-4 mb-6 text-left">
@@ -68,16 +54,16 @@ export default function Home() {
 
         <div className="flex justify-center gap-6">
           <Link to="/login" className="flex flex-col items-center">
-            <div className="h-14 w-14 bg-gradient-to-br from-purple-500 to-indigo-500 rounded-full flex items-center justify-center text-white text-xl shadow-lg hover:scale-110 transition">
-              <span role="img" aria-label="Login">🔐</span>
+            <div className="h-14 w-14 bg-blue-500 rounded-full flex items-center justify-center text-white text-xl shadow-lg hover:scale-110 transition">
+              🔐
             </div>
-            <span className="mt-2 font-medium text-gray-700 dark:text-gray-300">Login</span>
+            <span className="mt-2 text-gray-700 dark:text-gray-300">Login</span>
           </Link>
           <Link to="/register" className="flex flex-col items-center">
-            <div className="h-14 w-14 bg-teal-500 rounded-full flex items-center justify-center text-white text-xl shadow-lg hover:scale-110 transition">
-              <span role="img" aria-label="Register">📝</span>
+            <div className="h-14 w-14 bg-green-500 rounded-full flex items-center justify-center text-white text-xl shadow-lg hover:scale-110 transition">
+              📝
             </div>
-            <span className="mt-2 font-medium text-gray-700 dark:text-gray-300">Register</span>
+            <span className="mt-2 text-gray-700 dark:text-gray-300">Register</span>
           </Link>
         </div>
       </div>
@@ -111,66 +97,16 @@ export default function Home() {
             </div>
           </div>
         )}
-        {/* Animation Keyframes */}
-      <style>{`
-        @keyframes blob {
-          0% { transform: translate(0px, 0px) scale(1); }
-          33% { transform: translate(30px, -50px) scale(1.1); }
-          66% { transform: translate(-20px, 20px) scale(0.9); }
-          100% { transform: translate(0px, 0px) scale(1); }
-        }
-      `}</style>
-      <style>
-      {`
-        .bubble {
-          position: absolute;
-          border-radius: 50%;
-          border: 1px solid rgba(255, 255, 255, 0.4);
-          background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.5), rgba(255,255,255,0.05));
-          box-shadow: inset 0 0 20px rgba(255, 255, 255, 0.3), 0 0 30px rgba(255, 255, 255, 0.2);
-          backdrop-filter: blur(4px);
-          opacity: 0.6;
-          animation: float 15s ease-in-out infinite;
-        }
 
-        .bubble.one {
-          width: 180px;
-          height: 180px;
-          top: 5%;
-          left: 5%;
-          animation-delay: 0s;
-        }
-
-        .bubble.two {
-          width: 220px;
-          height: 220px;
-          top: 60%;
-          left: 70%;
-          animation-delay: 5s;
-        }
-
-        .bubble.three {
-          width: 160px;
-          height: 160px;
-          top: 80%;
-          left: 15%;
-          animation-delay: 2s;
-        }
-
-        @keyframes float {
-          0%   { transform: translateY(0px) rotate(0deg); opacity: 0.7; }
-          50%  { transform: translateY(-50px) rotate(180deg); opacity: 1; }
-          100% { transform: translateY(0px) rotate(360deg); opacity: 0.7; }
-        }
-
-        .dark .bubble {
-          border-color: rgba(255, 255, 255, 0.2);
-          background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.1), rgba(255,255,255,0.01));
-          box-shadow: inset 0 0 10px rgba(255, 255, 255, 0.15), 0 0 15px rgba(255, 255, 255, 0.1);
-          opacity: 0.3;
-        }
-      `}
-      </style>
+        {/* Blob animation keyframes */}
+        <style>{`
+          @keyframes blob {
+            0% { transform: translate(0px, 0px) scale(1); }
+            33% { transform: translate(30px, -50px) scale(1.1); }
+            66% { transform: translate(-20px, 20px) scale(0.9); }
+            100% { transform: translate(0px, 0px) scale(1); }
+          }
+        `}</style>
       </div>
     </div>
   );

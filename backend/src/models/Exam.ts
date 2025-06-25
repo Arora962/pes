@@ -6,8 +6,12 @@ export interface IExam extends Document {
   batch: Types.ObjectId;
   startTime: Date;
   endTime: Date;
-  numQuestions: number; // ✅ NEW FIELD
-  createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true }
+  numQuestions: number; 
+  questions: {
+    questionText: string;
+    maxMarks: number;
+  }[];
+  createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true };
 }
 
 const examSchema = new Schema<IExam>({
@@ -16,8 +20,15 @@ const examSchema = new Schema<IExam>({
   batch: { type: Schema.Types.ObjectId, ref: 'Batch', required: true },
   startTime: { type: Date, required: true },
   endTime: { type: Date, required: true },
-  numQuestions: { type: Number, required: true }, // ✅ NEW FIELD
+  numQuestions: { type: Number, required: true }, 
+  questions: [
+    {
+      questionText: { type: String, required: true },
+      maxMarks: { type: Number, required: true },
+    }
+  ],
   createdBy: Types.ObjectId,
+
 });
 
 export const Exam = model<IExam>('Exam', examSchema);

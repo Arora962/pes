@@ -63,28 +63,23 @@ export default function Register() {
     }
 
     try {
-      const res = await axios.post(`http://localhost:${PORT}/api/auth/register`, {
-        name,
-        email,
-        password,
-        role,
-      }, {
-        withCredentials: true 
-      });
+      await axios.post(`http://localhost:${PORT}/api/auth/send`, { email });
 
-      const { token, role: userRole } = res.data;
+      /*const { token, role: userRole } = res.data;
 
       localStorage.setItem('token', token);
       localStorage.setItem('role', userRole);
 
-      console.log('Registration successful:', res.data);
+      //console.log('Registration successful:', res.data);
       console.log('Token:', token);
-      console.log('Role:', userRole);
+      console.log('Role:', userRole);*/
 
-      if (userRole === 'admin') navigate('/admin');
+      navigate('/otp', {state: { email, password, role, name }});
+
+      /*if (userRole === 'admin') navigate('/admin');
       else if (userRole === 'teacher') navigate('/teacher');
       else if (userRole === 'ta') navigate('/ta');
-      else navigate('/dashboard');
+      else navigate('/dashboard');*/
     } catch (err) {
       if (axios.isAxiosError(err)) {
         showMessage(err.response?.data?.message || 'Registration failed');

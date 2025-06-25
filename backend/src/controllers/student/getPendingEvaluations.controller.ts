@@ -1,51 +1,70 @@
-import { Request, Response, NextFunction } from 'express';
-import { Evaluation } from '../../models/Evaluation.ts';
-import { Exam } from '../../models/Exam.ts';
-import { Batch } from '../../models/Batch.ts';
-import { User } from '../../models/User.ts';
+import { Response, NextFunction } from "express";
+import AuthenticatedRequest from "../../middlewares/authMiddleware.ts";
+import { Evaluation } from "../../models/Evaluation.ts";
+import { Submission } from "../../models/Submission.ts";
+import { generatePdfToken } from "../../utils/pdfToken.ts"; // ✅ Import token generator
 
 export const getPendingEvaluations = async (
-  req: Request,
+  req: AuthenticatedRequest,
   res: Response,
   next: NextFunction
-): Promise<void> => {
+) => {
   try {
-    const studentId = (req.query.studentId as string)?.trim();
-    const examId = (req.query.examId as string)?.trim();
+    const studentId = req.user?._id;
 
-    if (!studentId || !examId) {
-      res.status(400).json({ error: 'studentId and examId are required' });
-      return;
-    }
-
-    const exam = await Exam.findById(examId);
-    if (!exam) {
-      res.status(404).json({ error: 'Exam not found' });
-      return;
-    }
-
-    const batch = await Batch.findById(exam.batch).populate('students', '_id name email');
-    if (!batch) {
-      res.status(404).json({ error: 'Batch not found' });
-      return;
-    }
-
-    const allStudentsInBatch = batch.students as any[];
-
-    const evaluated = await Evaluation.find({
-      exam: examId,
+    const pending = await Evaluation.find({
       evaluator: studentId,
-    }).select('evaluatee');
+      status: "pending",
+    })
+      .populate({
+        path: "exam",
+        select: "title questions",
+      })
+      .lean(); // Return plain objects
 
-    const evaluatedIds = new Set(evaluated.map((e) => e.evaluatee.toString()));
+    const evaluations = await Promise.all(
+      pending.map(async (ev) => {
+        if (
+          !ev.exam ||
+          typeof ev.exam !== "object" ||
+          !("title" in ev.exam) ||
+          !("questions" in ev.exam) ||
+          !ev.evaluatee ||
+          typeof ev.evaluatee !== "object" ||
+          !("_id" in ev.evaluatee)
+        ) {
+          return null;
+        }
 
-    const pending = allStudentsInBatch.filter(
-      (s) => s._id.toString() !== studentId && !evaluatedIds.has(s._id.toString())
+        const submission = await Submission.findOne({
+          exam: ev.exam._id,
+          student: ev.evaluatee._id,
+        });
+
+        const token = generatePdfToken(
+          req.user!._id.toString(),
+          ev.exam._id.toString()
+        );
+
+        return {
+          _id: ev._id.toString(),
+          exam: {
+            _id: ev.exam._id.toString(),
+            title: ev.exam.title,
+            questions: ev.exam.questions,
+          },
+          evaluatee: {
+            _id: ev.evaluatee._id.toString(),
+          },
+          pdfUrl: submission
+            ? `http://localhost:5000/api/student/submission-pdf/${ev.exam._id}/${ev.evaluatee._id}?token=${token}`
+            : null,
+        };
+      })
     );
 
-    res.json({ evaluatees: pending });
+    res.json({ evaluations: evaluations.filter(Boolean) });
   } catch (err) {
-    console.error(err);
     next(err);
   }
 };

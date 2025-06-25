@@ -6,7 +6,7 @@ import axios from 'axios';
 
 const PORT = import.meta.env.VITE_BACKEND_PORT || 5000;
 
-type Tab = 'home' | 'course' | 'batch' | 'student' | 'teacher';
+type Tab = 'home' | 'course' | 'batch'| 'role' ;
 type Course = {
   _id: string;
   name: string;
@@ -16,6 +16,8 @@ type Course = {
 const AdminDashboard = () => {
   const token = localStorage.getItem('token');
   const [counts, setCounts] = useState({ teachers: 0, courses: 0, students: 0 });
+  const [profileData, setProfileData] = useState({ name: "", email: "", role: "" });
+  const [showProfilePopup, setShowProfilePopup] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('home');
   const [showSidebar, setShowSidebar] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -26,27 +28,106 @@ const AdminDashboard = () => {
   const [courseCode, setCourseCode] = useState('');
   const [courseIdToDelete, setCourseIdToDelete] = useState('');
   const [courses, setCourses] = useState<Course[]>([]);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [showCourseMsg, setShowCourseMsg] = useState(false);
+  const [showCourseDelMsg, setShowCourseDelMsg] = useState(false);
 
-  const [batchName, setBatchName] = useState('');
-  const [batchCourseCode, setBatchCourseCode] = useState('');
-  const [batchToDelete, setBatchToDelete] = useState('');
   const [batches, setBatches] = useState<any[]>([]);
 
-  const [teachers, setTeachers] = useState<any[]>([]);
-  const [teacherToDelete, setTeacherToDelete] = useState('');
-  const [assignEmail, setAssignEmail] = useState('');
-  const [assignCourseCode, setAssignCourseCode] = useState('');
-  const [unassignEmail, setUnassignEmail] = useState('');
-  const [unassignCourseCode, setUnassignCourseCode] = useState('');
-
-  const [students, setStudents] = useState<any[]>([]);
-  const [studentToDelete, setStudentToDelete] = useState('');
-  const [assignStudentEmail, setAssignStudentEmail] = useState('');
-  const [assignStudentCourseCode, setAssignStudentCourseCode] = useState('');
-  const [unassignStudentEmail, setUnassignStudentEmail] = useState('');
-  const [unassignStudentCourseCode, setUnassignStudentCourseCode] = useState('');
-
+  const [allUsers, setAllUsers] = useState<{ role: string; email: string; name: string }[]>([]);
+  const [showRoleMsg, setShowRoleMsg] = useState(false);
+  const [roleEmail, setRoleEmail] = useState("");
+  const [roleType, setRoleType] = useState("Admin");
+ 
   const navigate = useNavigate();
+
+  // Fetch profile data
+    useEffect(() => {
+      fetch(`http://localhost:${PORT}/api/dashboard/profile`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      })
+        .then(res => {
+          if (!res.ok) throw new Error('Unauthorized');
+          return res.json();
+        })
+        .then((data: { name: string, email: string, role: string }) => {
+          setProfileData(data);
+          //setProfileSaved(!!data.name && !!data.email && !!data.role);
+        })
+        .catch(err => {
+          console.error('Failed to fetch profile:', err);
+        });
+    }, []);
+  
+      const ProfileSVG = () => (
+        <svg width="38" height="38" viewBox="0 0 38 38" fill="none">
+          <circle cx="19" cy="19" r="19" fill="#57418d" />
+          <circle cx="19" cy="14" r="7" fill="#fff" />
+          <ellipse cx="19" cy="29.5" rx="11" ry="7.5" fill="#fff" />
+        </svg>
+      );
+
+  // Role Manager
+
+  const fetchAllUsers = () => {
+      fetch(`http://localhost:${PORT}/api/admin/users`)
+        .then(res => res.json())
+        .then(data => {
+          setAllUsers(data);
+        })
+        .catch(err => console.error('Failed to fetch users:', err));
+    };
+  
+    useEffect(() => {
+      fetchAllUsers();
+    }, []);
+  
+    const handleRoleUpdate = () => {
+      if (!roleEmail || !roleType) {
+        alert('Please select a user and a role');
+        return;
+      }
+      fetch(`http://localhost:${PORT}/api/admin/update-role`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ email: roleEmail, role: roleType })
+      })
+        .then(() => {
+          setShowRoleMsg(true);
+          setTimeout(() => setShowRoleMsg(false), 1200);
+          fetchAllUsers();
+          setRoleEmail('');
+          setRoleType('admin');
+        });
+    };
+
+  const DialogBox = ({
+      show,
+      message,
+      children
+    }: { show: boolean, message: string, children?: React.ReactNode }) => {
+      if (!show) return null;
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+          <div className="bg-white rounded-2xl shadow-xl px-8 py-8 flex flex-col items-center min-w-[320px] relative animate-fadein">
+            <div className="mb-2">
+              <svg width={56} height={56} fill="none" viewBox="0 0 56 56">
+                <circle cx="28" cy="28" r="28" fill="#6ddf99" />
+                <path d="M18 30l7 7 13-13" stroke="#fff" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+            <div className="text-lg text-[#235d3a] font-semibold text-center mb-1">{message}</div>
+            {children}
+          </div>
+        </div>
+      );
+    };
 
   useEffect(() => {
     fetch(`http://localhost:${PORT}/api/dashboard/counts`)
@@ -76,12 +157,24 @@ const AdminDashboard = () => {
     try {
       await axios.post(
         `http://localhost:${PORT}/api/admin/courses`,
-        { name: courseName, code: courseCode },
-        { headers: { Authorization: `Bearer ${token}` } }
+        {
+          name: courseName,
+          code: courseCode,
+          startDate,  // already in yyyy-mm-dd from <input type="date" />
+          endDate,
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
       );
-      alert('Course added successfully');
+      
+      //alert('Course added successfully');
+      setShowCourseMsg(true);
+      setTimeout(() => setShowCourseMsg(false), 1200);
       setCourseName('');
       setCourseCode('');
+      setStartDate('');
+      setEndDate('');
       fetchCourses();
     } catch (error) {
       console.error(error);
@@ -94,7 +187,9 @@ const AdminDashboard = () => {
       await axios.delete(`http://localhost:${PORT}/api/admin/courses/code/${courseIdToDelete}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      alert('Course deleted');
+      //alert('Course deleted');
+      setShowCourseDelMsg(true);
+      setTimeout(() => setShowCourseDelMsg(false), 1200);
       setCourseIdToDelete('');
       fetchCourses();
     } catch (error: any) {
@@ -109,48 +204,7 @@ const AdminDashboard = () => {
     }
   }, [activeTab]);
 
-  const handleAddBatch = async () => {
-    try {
-      const courseRes = await axios.get(`http://localhost:${PORT}/api/admin/courses`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const course = courseRes.data.find((c: any) => c.code === batchCourseCode);
-
-      if (!course) {
-        alert('Course not found');
-        return;
-      }
-
-      await axios.post(
-        `http://localhost:${PORT}/api/admin/batches`,
-        { name: batchName, courseId: course._id, students: [] },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      alert('Batch added successfully');
-      setBatchName('');
-      setBatchCourseCode('');
-      fetchBatches();
-    } catch (err) {
-      console.error(err);
-      alert('Failed to add batch');
-    }
-  };
-
-  const handleDeleteBatch = async () => {
-    try {
-      await axios.delete(`http://localhost:${PORT}/api/admin/batches/name/${batchToDelete}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      alert('Batch deleted successfully');
-      setBatchToDelete('');
-      fetchBatches();
-    } catch (err) {
-      console.error(err);
-      alert('Failed to delete batch');
-    }
-  };
-
+  
   const fetchBatches = async () => {
     try {
       const res = await axios.get(`http://localhost:${PORT}/api/admin/batches`, {
@@ -169,132 +223,7 @@ const AdminDashboard = () => {
     }
   }, [activeTab]);
 
-  const fetchTeachers = async () => {
-    try {
-      const res = await axios.get(`http://localhost:${PORT}/api/admin/teachers`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setTeachers(res.data);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const handleDeleteTeacher = async () => {
-    try {
-      await axios.delete(`http://localhost:${PORT}/api/admin/teachers/email/${teacherToDelete}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      alert('Teacher deleted successfully');
-      setTeacherToDelete('');
-      fetchTeachers();
-    } catch (err) {
-      console.error(err);
-      alert('Failed to delete teacher');
-    }
-  };
-
-  const handleAssignCourseToTeacher = async () => {
-    try {
-      await axios.put(
-        `http://localhost:${PORT}/api/admin/teachers/assign-course`,
-        { email: assignEmail, courseCode: assignCourseCode },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      alert('Teacher assigned to course successfully');
-      setAssignEmail('');
-      setAssignCourseCode('');
-      fetchTeachers();
-    } catch (err: any) {
-      alert(err.response?.data?.message || "Failed to assign course");
-    }
-  };
-
-  const handleUnassignCourseFromTeacher = async () => {
-    try {
-      await axios.put(
-        `http://localhost:${PORT}/api/admin/teachers/unassign-course`,
-        { email: unassignEmail, courseCode: unassignCourseCode },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      alert('Course unassigned from teacher successfully');
-      setUnassignEmail('');
-      setUnassignCourseCode('');
-      fetchTeachers();
-    } catch (err: any) {
-      alert(err.response?.data?.message || "Failed to unassign course");
-    }
-  };
-
-  useEffect(() => {
-    if (activeTab === 'teacher') {
-      fetchTeachers();
-      fetchCourses();
-    } 
-  }, [activeTab]);
-
-  const fetchStudents = async () => {
-    try {
-      const res = await axios.get(`http://localhost:${PORT}/api/admin/student`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setStudents(res.data);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const handleAssignCourseToStudent = async () => {
-    try {
-      await axios.put(
-        `http://localhost:${PORT}/api/admin/student/assign-course`,
-        { email: assignStudentEmail, courseCode: assignStudentCourseCode },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      alert('Course assigned to student successfully');
-      setAssignStudentEmail('');
-      setAssignStudentCourseCode('');
-      fetchStudents();
-    } catch (err: any) {
-      alert(err.response?.data?.message || "Failed to assign course");
-    }
-  };
-
-  const handleUnassignCourseFromStudent = async () => {
-    try {
-      await axios.put(
-        `http://localhost:${PORT}/api/admin/student/unassign-course`,
-        { email: unassignStudentEmail, courseCode: unassignStudentCourseCode },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      alert('Course unassigned from student successfully');
-      setUnassignStudentEmail('');
-      setUnassignStudentCourseCode('');
-      fetchStudents();
-    } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to unassign course');
-    }
-  };
-
-  const handleDeleteStudent = async () => {
-    try {
-      await axios.delete(`http://localhost:${PORT}/api/admin/student/email/${studentToDelete}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      alert('Student deleted successfully');
-      fetchStudents();
-    } catch (err) {
-      alert('Failed to delete student');
-    }
-  };
-
-  useEffect(() => {
-    if (activeTab === 'student') {
-      fetchStudents();
-      fetchCourses();
-    }
-  }, [activeTab]);
-
+  
   useEffect(() => {
     if (darkMode) {
       document.documentElement.classList.add('dark');
@@ -333,24 +262,18 @@ const AdminDashboard = () => {
                 onClick={() => setActiveTab('batch')}
                 className="bg-purple-700 text-white px-10 py-4 text-lg rounded-3xl"
               >
-                Manage Batches
+                View Batches
               </button>
               <button
-                onClick={() => setActiveTab('teacher')}
+                onClick={() => setActiveTab('role')}
                 className="bg-purple-700 text-white px-10 py-4 text-lg rounded-3xl"
               >
-                Manage Teachers
+                Manage Roles
               </button>
-              <button
-                onClick={() => setActiveTab('student')}
-                className="bg-purple-700 text-white px-10 py-4 text-lg rounded-3xl"
-              >
-                Manage Students
-              </button>
+              
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-12 w-full max-w-4xl">
               <div
-                onClick={() => setActiveTab('teacher')}
                 className="cursor-pointer bg-[#57418d] text-white p-6 rounded-3xl shadow-md text-center hover:bg-[#402b6c] transition"
               >
                 <FaChalkboardTeacher size={32} className="mx-auto mb-2" />
@@ -366,7 +289,6 @@ const AdminDashboard = () => {
                 <p className="text-sm">{counts.courses}</p>
               </div>
               <div
-                onClick={() => setActiveTab('student')}
                 className="cursor-pointer bg-[#57418d] text-white p-6 rounded-3xl shadow-md text-center hover:bg-[#402b6c] transition"
               >
                 <FaUserGraduate size={32} className="mx-auto mb-2" />
@@ -376,7 +298,83 @@ const AdminDashboard = () => {
             </div>
           </div>
         );
-      case 'course':
+   case 'role':
+      return (
+      <div className="flex flex-col items-center justify-start w-full h-full pt-10 pb-4">
+        <h2 className="text-3xl font-bold text-[#38365e] text-center mb-8">Role Manager</h2>
+        <div className="w-full flex flex-col items-start px-6 max-w-xl">
+          <p className="mb-8 text-[#38365e] text-left">
+            Update the role of a user by selecting their name and their new role.
+          </p>
+          <form
+            name="roleUpdateForm"
+            id="roleUpdateForm"
+            className="flex flex-col gap-6 w-full"
+            onSubmit={e => {
+              e.preventDefault();
+              handleRoleUpdate();
+            }}
+          >
+            <div className="flex flex-col items-start gap-1 w-full">
+              <div className="flex flex-col items-start gap-1 w-full">
+                <label className="text-[#38365e] font-semibold mb-1">Select User</label>
+                <select
+                  name="selectUser"
+                  id="selectUser"
+                  value={roleEmail}
+                  onChange={(e) => setRoleEmail(e.target.value)}
+                  className="border focus:border-blue-400 px-4 py-2 rounded-xl w-full"
+                  required
+                >
+                  <option value="">Select User</option>
+                  <optgroup label="Teaching Assistants (TAs)">
+                    {allUsers
+                      .filter(user => user.role === 'ta')
+                      .map(user => (
+                        <option key={user.email} value={user.email}>
+                          {user.name} ({user.email})
+                        </option>
+                      ))}
+                  </optgroup>
+                  <optgroup label="Students">
+                    {allUsers
+                      .filter(user => user.role === 'student')
+                      .map(user => (
+                        <option key={user.email} value={user.email}>
+                          {user.name} ({user.email})
+                        </option>
+                      ))}
+                  </optgroup>
+                </select>
+              </div>
+            </div>
+            <div className="flex flex-col items-start gap-1 w-full">
+              <label className="text-[#38365e] font-semibold mb-1">Select Role</label>
+              <select
+                name="selectRole"
+                id="selectRole"
+                className="border focus:border-blue-400 px-4 py-2 rounded-xl w-full"
+                value={roleType}
+                onChange={(e) => setRoleType(e.target.value)}
+                required
+              >
+                <option value="">Select Role</option>
+                <option value="student">Student</option>
+                <option value="ta">Teaching Assistant (TA)</option>
+              </select>
+            </div>
+            <button
+              type="submit"
+              className="bg-[#57418d] text-white px-7 py-2 rounded-2xl font-semibold shadow transition hover:bg-[#402b6c] mt-2"
+              style={{ minWidth: 140 }}
+            >
+              Update Role
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+   case 'course':
         return (
           <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-white p-6 rounded-3xl shadow">
@@ -398,13 +396,31 @@ const AdminDashboard = () => {
                 onChange={(e) => setCourseCode(e.target.value)}
                 placeholder="Enter Course Code"
                 className="border focus:border-blue-400 px-4 py-2 rounded-xl w-full mb-4"
+                
               />
+              <label className="block mb-2">Course Start Date</label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="input mb-2 w-full border focus:border-blue-400 px-4 py-2 rounded-xl"
+              />
+
+              <label className="block mb-2">Course End Date</label>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="input mb-4 w-full border focus:border-blue-400 px-4 py-2 rounded-xl"
+              />
+
               <button
                 onClick={handleAddCourse}
                 className="bg-[#57418d] text-white px-7 py-2 rounded-2xl font-semibold shadow transition hover:bg-[#402b6c]"
               >
                 Add Course
               </button>
+              
             </div>
             <div className="bg-white p-6 rounded-3xl shadow">
               <h2 className="text-xl font-bold mb-4">Remove Course</h2>
@@ -436,7 +452,9 @@ const AdminDashboard = () => {
                   <li key={course._id} className="border-b pb-2">
                     <strong>{course.name}</strong> — <code>{course.code}</code>
                     <br />
-                    <span className="text-sm text-gray-500">ID: {course._id}</span>
+                    {/*<span className="text-sm text-gray-500">
+                      Start: {new Date(course.startDate).toLocaleDateString()} – End: {new Date(course.endDate).toLocaleDateString()}
+                    </span>*/}
                   </li>
                 ))}
               </ul>
@@ -445,306 +463,13 @@ const AdminDashboard = () => {
         );
       case 'batch':
         return (
-          <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-white p-6 rounded-3xl shadow">
-              <h2 className="text-xl font-bold mb-4">Add New Batch</h2>
-              <input
-                name="batchName"
-                id="batchName"
-                type="text"
-                value={batchName}
-                onChange={(e) => setBatchName(e.target.value)}
-                placeholder="Enter Batch Name"
-                className="border focus:border-blue-400 px-4 py-2 rounded-xl w-full mb-2"
-              />
-              <select
-                name="batchCourseCode"
-                id="batchCourseCode"
-                value={batchCourseCode}
-                onChange={(e) => setBatchCourseCode(e.target.value)}
-                className="border focus:border-blue-400 px-4 py-2 rounded-xl w-full mb-4"
-              >
-                <option value="">Select Course</option>
-                {courses.map((course: any) => (
-                  <option key={course._id} value={course.code}>
-                    {course.name} ({course.code})
-                  </option>
-                ))}
-              </select>
-              <button
-                onClick={handleAddBatch}
-                className="bg-[#57418d] text-white px-7 py-2 rounded-2xl font-semibold shadow transition hover:bg-[#402b6c]"
-              >
-                Add Batch
-              </button>
-            </div>
-            <div className="bg-white p-6 rounded-3xl shadow">
-              <h2 className="text-xl font-bold mb-4">Remove Batch</h2>
-              <select
-                name="batchToDelete"
-                id="batchToDelete"
-                value={batchToDelete}
-                onChange={(e) => setBatchToDelete(e.target.value)}
-                className="border focus:border-blue-400 px-4 py-2 rounded-xl w-full mb-4"
-              >
-                <option value="">Select Batch</option>
-                {batches.map((batch: any) => (
-                  <option key={batch._id} value={batch.name}>
-                    {batch.name} ({batch.course?.code})
-                  </option>
-                ))}
-              </select>
-              <button
-                onClick={handleDeleteBatch}
-                className="bg-red-600 text-white px-7 py-2 rounded-2xl font-semibold shadow transition hover:bg-red-700"
-              >
-                Remove Batch
-              </button>
-            </div>
+          <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">            
             <div className="bg-white p-6 rounded-3xl shadow col-span-full">
               <h2 className="text-xl font-bold mb-4">All Batches</h2>
               <ul className="space-y-2">
                 {batches.map((batch: any) => (
                   <li key={batch._id} className="border-b pb-2">
                     <strong>{batch.name}</strong> — {batch.course?.name} ({batch.course?.code})
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        );
-      case 'teacher':
-        return (
-          <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-white p-6 rounded-3xl shadow">
-              <h2 className="text-xl font-bold mb-4">Assign Course to Teacher</h2>
-              <select
-                name="assignEmail"
-                id="assignEmail"
-                value={assignEmail}
-                onChange={(e) => setAssignEmail(e.target.value)}
-                className="border focus:border-blue-400 px-4 py-2 rounded-xl w-full mb-2"
-              >
-                <option value="">Select Teacher</option>
-                {teachers.map((teacher: any) => (
-                  <option key={teacher._id} value={teacher.email}>
-                    {teacher.name} ({teacher.email})
-                  </option>
-                ))}
-              </select>
-              <select
-                name="assignCourseCode"
-                id="assignCourseCode"
-                value={assignCourseCode}
-                onChange={(e) => setAssignCourseCode(e.target.value)}
-                className="border focus:border-blue-400 px-4 py-2 rounded-xl w-full mb-4"
-              >
-                <option value="">Select Course</option>
-                {courses.map((course: any) => (
-                  <option key={course._id} value={course.code}>
-                    {course.name} ({course.code})
-                  </option>
-                ))}
-              </select>
-              <button
-                onClick={handleAssignCourseToTeacher}
-                className="bg-[#57418d] text-white px-7 py-2 rounded-2xl font-semibold shadow transition hover:bg-[#402b6c]"
-              >
-                Assign Course
-              </button>
-            </div>
-            <div className="bg-white p-6 rounded-3xl shadow">
-              <h2 className="text-xl font-bold mb-4">Unassign Course from Teacher</h2>
-              <select
-                name="unassignEmail"
-                id="unassignEmail"
-                value={unassignEmail}
-                onChange={(e) => setUnassignEmail(e.target.value)}
-                className="border focus:border-blue-400 px-4 py-2 rounded-xl w-full mb-2"
-              >
-                <option value="">Select Teacher</option>
-                {teachers.map((teacher: any) => (
-                  <option key={teacher._id} value={teacher.email}>
-                    {teacher.name} ({teacher.email})
-                  </option>
-                ))}
-              </select>
-              <select
-                name="unassignCourseCode"
-                id="unassignCourseCode"
-                value={unassignCourseCode}
-                onChange={(e) => setUnassignCourseCode(e.target.value)}
-                className="border focus:border-blue-400 px-4 py-2 rounded-xl w-full mb-4"
-              >
-                <option value="">Select Course</option>
-                {courses.map((course: any) => (
-                  <option key={course._id} value={course.code}>
-                    {course.name} ({course.code})
-                  </option>
-                ))}
-              </select>
-              <button
-                onClick={handleUnassignCourseFromTeacher}
-                className="bg-red-600 text-white px-7 py-2 rounded-2xl font-semibold shadow transition hover:bg-red-700"
-              >
-                Unassign Course
-              </button>
-            </div>
-            <div className="bg-white p-6 rounded-3xl shadow">
-              <h2 className="text-xl font-bold mb-4">Remove Teacher</h2>
-              <select
-                name="teacherToDelete"
-                id="teacherToDelete"
-                value={teacherToDelete}
-                onChange={(e) => setTeacherToDelete(e.target.value)}
-                className="border focus:border-blue-400 px-4 py-2 rounded-xl w-full mb-2"
-              >
-                <option value="">Select Teacher</option>
-                {teachers.map((teacher: any) => (
-                  <option key={teacher._id} value={teacher.email}>
-                    {teacher.name} ({teacher.email})
-                  </option>
-                ))}
-              </select>
-              <button
-                onClick={handleDeleteTeacher}
-                className="bg-red-600 text-white px-7 py-2 rounded-2xl font-semibold shadow transition hover:bg-red-700"
-              >
-                Remove Teacher
-              </button>
-            </div>
-            <div className="bg-white p-6 rounded-3xl shadow col-span-full">
-              <h2 className="text-xl font-bold mb-4">All Teachers</h2>
-              <ul className="space-y-2">
-                {teachers.map((teacher: any) => (
-                  <li key={teacher._id} className="border-b pb-2">
-                    <strong>{teacher.name}</strong> — {teacher.email}
-                    <br />
-                    <span className="text-sm text-gray-600">
-                      Courses:{" "}
-                      {teacher.enrolledCourses && teacher.enrolledCourses.length > 0
-                        ? teacher.enrolledCourses.map((c: any) => `${c.name} (${c.code})`).join(', ')
-                        : "None"}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        );
-      case 'student':
-        return (
-          <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-white p-6 rounded-3xl shadow">
-              <h2 className="text-xl font-bold mb-4">Assign Course to Student</h2>
-              <select
-                name="assignEmail"
-                id="assignEmail"
-                value={assignStudentEmail}
-                onChange={(e) => setAssignStudentEmail(e.target.value)}
-                className="border focus:border-blue-400 px-4 py-2 rounded-xl w-full mb-2"
-              >
-                <option value="">Select Student</option>
-                {students.map((s: any) => (
-                  <option key={s._id} value={s.email}>
-                    {s.name} ({s.email})
-                  </option>
-                ))}
-              </select>
-              <select
-                name="assignCourseCode"
-                id="assignCourseCode"
-                value={assignStudentCourseCode}
-                onChange={(e) => setAssignStudentCourseCode(e.target.value)}
-                className="border focus:border-blue-400 px-4 py-2 rounded-xl w-full mb-4"
-              >
-                <option value="">Select Course</option>
-                {courses.map((c: any) => (
-                  <option key={c._id} value={c.code}>
-                    {c.name} ({c.code})
-                  </option>
-                ))}
-              </select>
-              <button
-                onClick={handleAssignCourseToStudent}
-                className="bg-[#57418d] text-white px-7 py-2 rounded-2xl font-semibold shadow transition hover:bg-[#402b6c]"
-              >
-                Assign Course
-              </button>
-            </div>
-            <div className="bg-white p-6 rounded-3xl shadow">
-              <h2 className="text-xl font-bold mb-4">Unassign Course from Student</h2>
-              <select
-                name="unassignEmail"
-                id="unassignEmail"
-                value={unassignStudentEmail}
-                onChange={(e) => setUnassignStudentEmail(e.target.value)}
-                className="border focus:border-blue-400 px-4 py-2 rounded-xl w-full mb-2"
-              >
-                <option value="">Select Student</option>
-                {students.map((s: any) => (
-                  <option key={s._id} value={s.email}>
-                    {s.name} ({s.email})
-                  </option>
-                ))}
-              </select>
-              <select
-                name="unassignCourseCode"
-                id="unassignCourseCode"
-                value={unassignStudentCourseCode}
-                onChange={(e) => setUnassignStudentCourseCode(e.target.value)}
-                className="border focus:border-blue-400 px-4 py-2 rounded-xl w-full mb-4"
-              >
-                <option value="">Select Course</option>
-                {courses.map((c: any) => (
-                  <option key={c._id} value={c.code}>
-                    {c.name} ({c.code})
-                  </option>
-                ))}
-              </select>
-              <button
-                onClick={handleUnassignCourseFromStudent}
-                className="bg-red-600 text-white px-7 py-2 rounded-2xl font-semibold shadow transition hover:bg-red-700"
-              >
-                Unassign Course
-              </button>
-            </div>
-            <div className="bg-white p-6 rounded-3xl shadow">
-              <h2 className="text-xl font-bold mb-4">Remove Student</h2>
-              <select
-                name="studentToDelete"
-                id="studentToDelete"
-                value={studentToDelete}
-                onChange={(e) => setStudentToDelete(e.target.value)}
-                className="border focus:border-blue-400 px-4 py-2 rounded-xl w-full mb-2"
-              >
-                <option value="">Select Student</option>
-                {students.map((s: any) => (
-                  <option key={s._id} value={s.email}>
-                    {s.name} ({s.email})
-                  </option>
-                ))}
-              </select>
-              <button
-                onClick={handleDeleteStudent}
-                className="bg-red-600 text-white px-7 py-2 rounded-2xl font-semibold shadow transition hover:bg-red-700"
-              >
-                Remove Student
-              </button>
-            </div>
-            <div className="bg-white p-6 rounded-3xl shadow col-span-full">
-              <h2 className="text-xl font-bold mb-4">All Students</h2>
-              <ul className="space-y-2">
-                {students.map((s: any) => (
-                  <li key={s._id} className="border-b pb-2">
-                    <strong>{s.name}</strong> — {s.email}
-                    <br />
-                    <span className="text-sm text-gray-600">
-                      Courses:{" "}
-                      {s.enrolledCourses?.length
-                        ? s.enrolledCourses.map((c: any) => `${c.name} (${c.code})`).join(', ')
-                        : "None"}
-                    </span>
                   </li>
                 ))}
               </ul>
@@ -758,6 +483,10 @@ const AdminDashboard = () => {
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: "linear-gradient(180deg,#ffe3ec 80%,#f0f0f5 100%)" }}>
+      {/* Success Dialog */}
+      <DialogBox show={showRoleMsg} message="Role Updated Successfully!" />
+      <DialogBox show={showCourseMsg} message="Course Added Successfully!" />
+      <DialogBox show={showCourseDelMsg} message="Course Delete Successfully!" />
       {/* Sidebar */}
       <div className={`${showSidebar ? 'w-64' : 'w-20'} bg-gradient-to-b from-[#493a6b] to-[#2D2150] text-white flex flex-col justify-between py-6 px-4 rounded-r-3xl transition-all duration-300`}>
         <button
@@ -786,15 +515,11 @@ const AdminDashboard = () => {
               <FaBoxes className={`transition-all ${showSidebar ? 'mr-2 text-xl' : 'text-3xl'}`} />
               {showSidebar && 'Batch Manager'}
             </li>
-            <li onClick={() => setActiveTab('teacher')}
-              className={`cursor-pointer ${activeTab === 'teacher' ? 'bg-[#57418d]' : ''} flex items-center px-4 py-2 rounded transition`}>
-              <FaChalkboardTeacher className={`transition-all ${showSidebar ? 'mr-2 text-xl' : 'text-3xl'}`} />
-              {showSidebar && 'Teacher Manager'}
-            </li>
-            <li onClick={() => setActiveTab('student')}
-              className={`cursor-pointer ${activeTab === 'student' ? 'bg-[#57418d]' : ''} flex items-center px-4 py-2 rounded transition`}>
-              <FaUserGraduate className={`transition-all ${showSidebar ? 'mr-2 text-xl' : 'text-3xl'}`} />
-              {showSidebar && 'Student Manager'}
+            <li
+            onClick={() => setActiveTab('role')}
+            className={`cursor-pointer ${activeTab === 'role' ? 'bg-[#57418d]' : ''} flex items-center px-4 py-2 rounded transition`}>
+             <FaUserGraduate className={`transition-all ${showSidebar ? 'mr-2 text-xl' : 'text-3xl'}`} />
+              {showSidebar && 'Role Manager'}
             </li>
           </ul>
         </div>
@@ -839,6 +564,43 @@ const AdminDashboard = () => {
           <div className="w-full">{renderContent()}</div>
         </div>
       </div>
+      {/* Profile button */}
+        <div className="absolute top-4 right-6 z-20">
+          <button onClick={() => setShowProfilePopup(!showProfilePopup)}
+            className="p-2 flex items-center justify-center rounded-full border-2 border-transparent hover:border-blue-300 transition active:scale-95 bg-white shadow"
+            style={{ boxShadow: '0 2px 14px 0 rgba(87,65,141,0.16)' }}
+          >
+            <ProfileSVG />
+          </button>
+          {showProfilePopup && (
+              <div
+                className="absolute right-0 mt-3 w-80 bg-white p-4 rounded-b-3xl shadow-lg z-10"
+                style={{
+                  borderTopLeftRadius: 0,
+                  borderTopRightRadius: 0,
+                  borderBottomLeftRadius: 24,
+                  borderBottomRightRadius: 24,
+                  boxShadow: '0 2px 14px 0 rgba(87,65,141,0.16)'
+                }}
+              >
+                <h2 className="text-xl font-bold mb-4">Profile Info</h2>
+                <div className="space-y-2 mb-4">
+                  <p><strong>Name:</strong> {profileData.name}</p>
+                  <p><strong>Email:</strong> {profileData.email}</p>
+                  <p><strong>Role:</strong> {profileData.role}</p>
+                </div>
+                <button
+                  onClick={() => {
+                    //setActivePage("profile");
+                    setShowProfilePopup(false);
+                  }}
+                  className="bg-purple-700 text-white px-4 py-2 rounded-3xl w-full"
+                >
+                  OK
+                </button>
+              </div>
+            )}
+        </div>
       {/* Settings Button */}
       <div className="absolute bottom-6 right-6 z-20">
         <button

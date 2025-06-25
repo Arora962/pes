@@ -3,7 +3,6 @@ import { Submission } from "../../models/Submission.ts";
 import { Exam } from "../../models/Exam.ts";
 import { Evaluation } from "../../models/Evaluation.ts";
 import { Batch } from "../../models/Batch.ts";
-import { Types } from "mongoose";
 
 export const submitAnswer = async (
   req: Request,
@@ -12,10 +11,11 @@ export const submitAnswer = async (
 ) => {
   try {
     console.log("submitAnswer called");
-    const { examId, studentId } = req.body;
+    const { examId } = req.body;
 
+    const studentId = req.user?._id?.toString() || req.body.studentId;
     if (!studentId) {
-      res.status(400).json({ error: "studentId is required in body" });
+      res.status(400).json({ error: "studentId is required" });
       return;
     }
     if (!req.file || !examId) {
@@ -42,9 +42,7 @@ export const submitAnswer = async (
       exam: examId,
     });
     if (existing) {
-      res
-        .status(409)
-        .json({ error: "You have already submitted your answer" });
+      res.status(409).json({ error: "You have already submitted your answer" });
       return;
     }
 
@@ -59,36 +57,38 @@ export const submitAnswer = async (
       submittedAt: now,
     });
 
-    // ------------------ PEER EVALUATION LOGIC ------------------
-    const K = 3;
+    // // ------------------ PEER EVALUATION LOGIC ------------------
+    // const K = 3;
 
-    const batch = await Batch.findById(exam.batch);
-    if (!batch) {
-      console.warn("Batch not found for exam, skipping peer assignment");
-      res.json({ message: "PDF answer submitted, but peer assignment skipped" });
-      return;
-    }
+    // const batch = await Batch.findById(exam.batch);
+    // if (!batch) {
+    //   console.warn("Batch not found for exam, skipping peer assignment");
+    //   res.json({
+    //     message: "PDF answer submitted, but peer assignment skipped",
+    //   });
+    //   return;
+    // }
 
-    // Filter out the submitting student and shuffle
-    const peerIds = batch.students
-      .filter((id) => id.toString() !== studentId)
-      .sort(() => 0.5 - Math.random())
-      .slice(0, K);
+    // // Filter out the submitting student and shuffle
+    // const peerIds = batch.students
+    //   .filter((id) => id.toString() !== studentId)
+    //   .sort(() => 0.5 - Math.random())
+    //   .slice(0, K);
 
-    // Insert evaluations for the selected peers
-    const evaluationDocs = peerIds.map((evaluatorId) => ({
-      exam: exam._id,
-      evaluator: new Types.ObjectId(evaluatorId),
-      evaluatee: new Types.ObjectId(studentId),
-      marks: [],
-      feedback: "",
-      status: "pending",
-      flagged: false,
-    }));
+    // // Insert evaluations for the selected peers
+    // const evaluationDocs = peerIds.map((evaluatorId) => ({
+    //   exam: exam._id,
+    //   evaluator: new Types.ObjectId(evaluatorId),
+    //   evaluatee: new Types.ObjectId(studentId),
+    //   marks: [],
+    //   feedback: "",
+    //   status: "pending",
+    //   flagged: false,
+    // }));
 
-    await Evaluation.insertMany(evaluationDocs);
-    console.log(`Assigned evaluation to ${peerIds.length} peers`);
-
+    // await Evaluation.insertMany(evaluationDocs);
+    // console.log(`Assigned evaluation to ${peerIds.length} peers`);
+    console.log("PDF answer submitted successfully");
     res.json({ message: "PDF answer submitted successfully" });
   } catch (err) {
     console.error(err);

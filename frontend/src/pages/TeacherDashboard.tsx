@@ -891,7 +891,7 @@ const TeacherDashboard = ({ onLogout }: { onLogout?: () => void }) => {
         <DialogBox show={showRoleMsg} message="Role Updated Successfully!" />
 
    {showEnrollModal && (
-   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
     <form
       onSubmit={handleEnrollSubmit}
       className="bg-white rounded-2xl shadow-xl px-8 py-8 flex flex-col items-center w-[350px] max-w-full"
@@ -924,15 +924,11 @@ const TeacherDashboard = ({ onLogout }: { onLogout?: () => void }) => {
             id="csv-upload"
             onChange={async (e) => {
               const file = e.target.files?.[0];
-              if (!file) {
-                setEnrollError("Please upload a CSV file.");
-                return;
-              }
+              if (!file) return;
               if (!file.name.endsWith('.csv')) {
-                setEnrollError("Please upload a valid CSV file only.");
+                setEnrollError('Please upload a valid CSV file.');
                 return;
               }
-              setEnrollError('');
               setCsvFileName(file.name);
 
               // CSV Parse Logic
@@ -964,16 +960,11 @@ const TeacherDashboard = ({ onLogout }: { onLogout?: () => void }) => {
           </label>
           <span className="text-xs text-gray-500 mt-1">{csvFileName ? csvFileName : "No file chosen"}</span>
           <span className="text-xs text-gray-500 mt-1">Upload a CSV file with columns: Name, Email</span>
+            {enrollError && (
+    <div className="mt-2 text-red-600 font-semibold text-center w-full">{enrollError}</div>
+  )}
         </div>
       </div>
-
-      {/* Error message block */}
-      {enrollError && (
-        <div className="mb-2 text-red-600 font-semibold text-center">
-          {enrollError}
-        </div>
-      )}
-
       <div className="flex gap-4 mt-6">
         <button
           type="submit"
@@ -983,10 +974,7 @@ const TeacherDashboard = ({ onLogout }: { onLogout?: () => void }) => {
         </button>
         <button
           type="button"
-          onClick={() => {
-            setShowEnrollModal(false);
-            setEnrollError('');
-          }}
+          onClick={() => setShowEnrollModal(false)}
           className="bg-gray-200 text-gray-700 rounded-2xl px-8 py-2 font-semibold hover:bg-gray-300 transition"
         >
           Cancel
@@ -994,10 +982,9 @@ const TeacherDashboard = ({ onLogout }: { onLogout?: () => void }) => {
       </div>
       {enrollSuccess && (
         <div className="mt-4 text-green-600 font-semibold text-center">
-          Student enrolled successfully!
+          Student enrolled successfully!a
         </div>
       )}
-      
       <div className="mt-4 w-full">
         <div className="font-semibold mb-1">Enrolled Students:</div>
       <ul className="max-h-24 overflow-y-auto text-sm">
