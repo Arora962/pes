@@ -294,7 +294,7 @@ const AdminDashboard = () => {
   const [endDate, setEndDate] = useState('');
   const [courseIdToDelete, setCourseIdToDelete] = useState('');
   const [roleEmail, setRoleEmail] = useState("");
-  const [roleType, setRoleType] = useState("admin"); // Default to admin
+  const [roleType, setRoleType] = useState(""); // Default to admin
   const [toastMessage, setToastMessage] = useState('');
   const [toastType, setToastType] = useState<'success' | 'error'>('success');
 
